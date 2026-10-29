@@ -2,7 +2,7 @@
 
 ## Usage
 ```bash
-jarr <path/to/file>
+jarr </path/to/file>
 ```
 
 ## Roadmap
