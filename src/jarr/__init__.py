@@ -26,15 +26,38 @@ def main() -> int:
     except OSError as e:
         logger.error("Can't read %s: %s", file_path, e)
         return 1
+
     try:
         media = Media(file_path)
     except KeyError as e:
         logger.error("Failed to identify: %s", e)
         return 1
+
     try:
         url = f"{TMDB_URL}{SEARCH_ENDPOINTS[media.type]}/"
-        response = requests.get(url, params={"query": media.title, "primary_release_year": media.year}).json()
+        response = requests.get(url, params={"query": media.title, "primary_release_year": media.year}, timeout=5).json()
         data = response.json()
         query_results = []
         for result in data.get("results")[:3]:
             query_results.append(TMDBMatch(result))
+    except ConnectionError as e:
+        logger.error("Failed to connect with TMDB: %s", e)
+        return 1
+    except ConnectTimeout as e:
+        logger.error("Couldn't connect to TMDB: %s", e)
+        return 1
+    except ReadTimeout as e:
+        logger.error("Response took to long: %s", e)
+        return 1
+    except HTTPError as e:
+        if e.response.status_code == 401:
+            logger.error("Error %s: Check that your TMDB token is correct", e.response.status_code)
+            return 1
+    print("Query returned these top 3 matches:")
+    for i in range(0, len(query_results)):
+        print(f"{i}. {query_results[1]}")
+    while True:
+        option = input("Choose an option: ").strip().lower()
+        if type(option) == int and 1 <= option <= 3
+        print("Please select a valid option")
+
