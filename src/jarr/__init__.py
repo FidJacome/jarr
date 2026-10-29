@@ -11,7 +11,7 @@ class UnsupportedFileError(ValueError):
 
 def main() -> int:
     load_dotenv()
-    logging.basicConfig(filename='jellyfin_companion.log', level=logging.INFO)
+    logging.basicConfig(filename='jarr.log', level=logging.INFO)
     try:
         file_path = Path(sys.argv[1])
         file_path = file_path.resolve(strict=True)
