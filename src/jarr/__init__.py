@@ -1,7 +1,10 @@
 import logging
+import requests
 from pathlib import Path
-from .parser import parse
 from dotenv import load_dotenv
+from .constatns import VIDEO_EXTENSIONS, TMDB_URL, SEARCH_ENDPOINTS
+from .media import Media
+from .tmdbmatch import TMDBMatch
 logger = logging.getLogger(__name__)
 
 class UnsupportedFileError(ValueError):
@@ -14,6 +17,8 @@ def main() -> int:
     logging.basicConfig(filename='jarr.log', level=logging.INFO)
     try:
         file_path = Path(sys.argv[1])
+        if file_path.suffix not in VIDEO_EXTENSIONS:
+            raise UnsupportedFileError(file_path)
         file_path = file_path.resolve(strict=True)
     except FileNotFoundError:
         logger.error("File %s not found.", file_path)
@@ -26,4 +31,10 @@ def main() -> int:
     except KeyError as e:
         logger.error("Failed to identify: %s", e)
         return 1
-    
+    try:
+        url = f"{TMDB_URL}{SEARCH_ENDPOINTS[media.type]}/"
+        response = requests.get(url, params={"query": media.title, "primary_release_year": media.year}).json()
+        data = response.json()
+        query_results = []
+        for result in data.get("results")[:3]:
+            query_results.append(TMDBMatch(result))
