@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-jellyfin-companion = "jarr:main"
+jarr = "jarr:main"
 
 [build-system]
 requires = ["uv_build>=0.13.6,<0.14.0"]
