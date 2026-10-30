@@ -7,7 +7,3 @@ class Media():
         self.year = guess["year"]
         self.container = guess["container"]
         self.type = guess["type"]
-
-    def parse() -> str:
-        return f"{self.title} ({self.year}).{self.container}"
-
