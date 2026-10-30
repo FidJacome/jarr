@@ -12,7 +12,7 @@ class Media:
 
     @classmethod
     def from_path(cls, path):
-        guess = guessit(path)
+        guess = guessit("/".join(path.parts[-3:]))
         return cls(
             path=path,
             title=guess["title"],
