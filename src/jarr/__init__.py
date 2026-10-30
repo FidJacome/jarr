@@ -9,9 +9,11 @@ from .constants import VIDEO_EXTENSIONS, TMDB_URL, SEARCH_ENDPOINTS
 from .media import Media
 from .tmdbmatch import TMDBMatch
 from .query_ops import TMDB_query, TMDB_select, TMDBError, NoMatchError
+from .style import bold, dim, red, green, yellow, short_path
 logger = logging.getLogger(__name__)
 
 USAGE = "Usage: jarr <video file>"
+LOG_FILE = Path(os.getenv("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "jarr" / "jarr.log"
 
 class UnsupportedFileError(ValueError):
     def __init__(self, path):
@@ -23,7 +25,7 @@ def ask(prompt: str, choices: list[str], default: str) -> str:
         answer = input(prompt).strip().lower() or default
         if answer in choices:
             return answer
-        print(f"Please answer one of: {', '.join(choices)}")
+        print(yellow(f"Please answer one of: {', '.join(choices)}"))
 
 def main() -> int:
     if len(sys.argv) != 2 or sys.argv[1] in ("-h", "--help"):
@@ -33,10 +35,13 @@ def main() -> int:
     try:
         load_dotenv()
         token = os.getenv("TMDB_TOKEN")
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        log_file = logging.FileHandler(LOG_FILE)
+        log_file.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
         console = logging.StreamHandler()
-        console.setFormatter(logging.Formatter("Error: %(message)s"))
+        console.setFormatter(logging.Formatter(f"{red('Error:')} %(message)s"))
         console.setLevel(logging.ERROR)
-        logging.basicConfig(level=logging.INFO, handlers=[logging.FileHandler("jarr.log"), console])
+        logging.basicConfig(level=logging.INFO, handlers=[log_file, console])
 
         try:
             file_path: "Path" = Path(sys.argv[1])
@@ -60,23 +65,19 @@ def main() -> int:
             logger.error("Couldn't detect season and episode numbers for %s", file_path)
             return 1
 
-        print(f"File: {file_path.name}")
-        print(f"  Title: {media.title}")
-        print(f"  Year:  {media.year if media.year else 'unknown'}")
-        if media.kind == "episode":
-            print(f"  Kind:  TV episode (S{media.season:02d}E{media.episode:02d})")
-        else:
-            print("  Kind:  Movie")
-        answer = ask("Search TMDB with this? [Y]es / [l]oose, title only / [n]o: ", ["y", "l", "n"], "y")
+        year = f" ({media.year})" if media.year else ""
+        kind = f"TV · S{media.season:02d}E{media.episode:02d}" if media.kind == "episode" else "Movie"
+        print(dim(file_path.name))
+        print(f"{bold(media.title)}{year}  {dim(kind)}")
+        answer = ask(f"Search TMDB? {dim('[Y]es / [l]oose (ignore year) / [n]o')} ", ["y", "l", "n"], "y")
         if answer == "n": raise KeyboardInterrupt
 
         try:
-            print(f"Looking for {media.title} in TMDB...")
+            print(dim("Searching TMDB..."))
             tmdb_results = TMDB_query(media, answer == "l", token)
-            print("If no option matches your media, input 0 to perform a \"loose\" query")
             option = TMDB_select(tmdb_results)
             while option == 0:
-                print(f"Looking for {media.title} in TMDB, ignoring the year...")
+                print(dim("Searching TMDB, ignoring the year..."))
                 tmdb_results = TMDB_query(media, True, token)
                 option = TMDB_select(tmdb_results)
             if option == -1: raise KeyboardInterrupt
@@ -99,15 +100,15 @@ def main() -> int:
             new_file_path = target_path / f"{title} S{media.season:02d}E{media.episode:02d}{file_path.suffix}"
 
         if new_file_path.exists():
-            print(f"{new_file_path} already exists.")
-            if ask("Overwrite it? [y/N]: ", ["y", "n"], "n") == "n":
+            print(yellow(f"{short_path(new_file_path)} already exists."))
+            if ask(f"Overwrite it? {dim('[y/N]')} ", ["y", "n"], "n") == "n":
                 print("Aborted, nothing was moved.")
                 return 1
 
-        print(f"Moving to {new_file_path}...")
         target_path.mkdir(parents=True, exist_ok=True)
         shutil.move(file_path, new_file_path)
-        print("Done.")
+        logger.info("Moved %s -> %s", file_path, new_file_path)
+        print(f"{green('✓')} {short_path(new_file_path)}")
     except UnsupportedFileError as e:
         logger.error("%s", e)
         return 1

@@ -3,6 +3,7 @@ from requests.exceptions import ConnectionError, ConnectTimeout, ReadTimeout, HT
 from .constants import TMDB_URL, SEARCH_ENDPOINTS
 from .media import Media
 from .tmdbmatch import TMDBMatch
+from .style import bold, dim, cyan, yellow
 
 class TMDBError(Exception):
     pass
@@ -50,19 +51,22 @@ def TMDB_query(media: "Media", loose_query: bool, token) -> list["TMDBMatch"]:
     return query_results
 
 def TMDB_select(results: list["TMDBMatch"]) -> int:
-    print("Query returned these top matches:")
+    print()
     for i, match in enumerate(results, start=1):
-        print(f"{i}. {match}")
+        print(f"  {cyan(i)}  {bold(match.title)} {dim(f'({match.year})')}")
+        if match.overview:
+            overview = match.overview if len(match.overview) <= 90 else match.overview[:87].rstrip() + "..."
+            print(f"     {dim(overview)}")
+    print(f"\n  {cyan(0)}  Loose search (ignore year)    {cyan(-1)}  Cancel")
 
     while True:
-        print("Input -1 to cancel.")
-        raw = input("Choose an option: ").strip()
+        raw = input(f"{bold('Choose:')} ").strip()
         try:
             option = int(raw)
         except ValueError:
-            print("Please enter a number.")
+            print(yellow("Please enter a number."))
             continue
         if -1 <= option <= len(results):
             break
-        print(f"Choose a number between -1 and {len(results)}.")
+        print(yellow(f"Choose a number between -1 and {len(results)}."))
     return option
