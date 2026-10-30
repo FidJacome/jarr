@@ -1,25 +1,30 @@
 import logging
+import os
+import shutil
+import sys
 import requests
 from pathlib import Path
 from dotenv import load_dotenv
-from .constatns import VIDEO_EXTENSIONS, TMDB_URL, SEARCH_ENDPOINTS
+from .constants import VIDEO_EXTENSIONS, TMDB_URL, SEARCH_ENDPOINTS
 from .media import Media
 from .tmdbmatch import TMDBMatch
+from .query_ops import TMDB_query, TMDB_select, TMDBError, NoMatchError
 logger = logging.getLogger(__name__)
 
 class UnsupportedFileError(ValueError):
     def __init__(self, path):
         self.path = path
-        super().__init__(f"{path.suffix} is not a supported video type: {path}")
+        super().__init__(f"{path.suffix} is not a supported file type: {path}")
 
 def main() -> int:
     try:
         load_dotenv()
+        token = os.getenv("TMDB_TOKEN")
         logging.basicConfig(filename='jarr.log', level=logging.INFO)
 
         try:
             file_path: "Path" = Path(sys.argv[1])
-            if file_path.suffix not in VIDEO_EXTENSIONS:
+            if file_path.suffix.lower() not in VIDEO_EXTENSIONS:
                 raise UnsupportedFileError(file_path)
             file_path = file_path.resolve(strict=True)
         except FileNotFoundError:
@@ -30,50 +35,43 @@ def main() -> int:
             return 1
 
         try:
-            media: "Media" = Media(file_path)
+            media: "Media" = Media.from_path(file_path)
         except KeyError as e:
             logger.error("Failed to identify: %s", e)
             return 1
 
+        if media.kind == "episode" and not (isinstance(media.season, int) and isinstance(media.episode, int)):
+            logger.error("Couldn't detect season and episode numbers for %s", file_path)
+            return 1
+
         try:
-            url: str = f"{TMDB_URL}{SEARCH_ENDPOINTS[media.type]}/"
-            response = requests.get(url, params={"query": media.title, "primary_release_year": media.year}, timeout=5).json()
-            data = response.json()
-            query_results: list["TMDBMatch"] = []
-            for result in data.get("results")[:3]:
-                query_results.append(TMDBMatch(result))
-        except ConnectionError as e:
-            logger.error("No internet connection: %s", e)
+            print(f"Looking for {media.title} in TMDB")
+            tmdb_results = TMDB_query(media, False, token)
+            print("If no option matches your media, input 0 to perform a \"loose\" query")
+            option = TMDB_select(tmdb_results)
+            while option == 0:
+                tmdb_results = TMDB_query(media, True, token)
+                option = TMDB_select(tmdb_results)
+            if option == -1: raise KeyboardInterrupt
+        except TMDBError as e:
+            logger.error(e)
             return 1
-        except ConnectTimeout as e:
-            logger.error("Couldn't connect to TMDB: %s", e)
-            return 1
-        except ReadTimeout as e:
-            logger.error("Response took to long: %s", e)
-            return 1
-        except HTTPError as e:
-            if e.response.status_code == 401:
-                logger.error("Error %s: Check that your TMDB token is correct", e.response.status_code)
-                return 1
-            logger.error("Error %s: %s", e.response.status_code, e.response.reason)
+        except NoMatchError as e:
+            logger.error(e)
             return 1
 
-        print("Query returned these top matches:")
-        for i, match in enumerate(query_results, start=1):
-            print(f"{i}. {match}")
+        selection = tmdb_results[option - 1]
+        title = selection.title.replace("/", "-")
+        folder_name = f"{title} ({selection.year}) [tmdbid-{selection.id}]"
 
-        while True:
-            raw = input("Choose an option: ").strip()
-            try:
-                option = int(raw)
-            except ValueError:
-                print("Please enter a number.")
-                continue
-            if 1 <= option <= len(query_results):
-                break
-            print(f"Choose a number between 1 and {len(query_results)}.")
-
-        selection = query_results[option - 1]
+        if media.kind == "movie":
+            target_path = file_path.home() / "staging" / "movie" / folder_name
+            target_path.mkdir(parents=True, exist_ok=True)
+            new_file_path = shutil.move(file_path, target_path / f"{title} ({selection.year}){file_path.suffix}")
+        elif media.kind == "episode":
+            target_path = file_path.home() / "staging" / "tv" / folder_name / f"Season {media.season:02d}"
+            target_path.mkdir(parents=True, exist_ok=True)
+            new_file_path = shutil.move(file_path, target_path / f"{title} S{media.season:02d}E{media.episode:02d}{file_path.suffix}")
     except UnsupportedFileError as e:
         logger.error("%s", e)
         return 1
@@ -81,5 +79,5 @@ def main() -> int:
         print("\nCancelled.")
         return 130
     except Exception:
-        logger.exception("Unexpectred error.")
+        logger.exception("Unexpected error.")
         return 1
