@@ -11,7 +11,7 @@ class NoMatchError(Exception):
     pass
 
 def TMDB_query(media: "Media", loose_query: bool, token) -> list["TMDBMatch"]:
-    url: str = f"{TMDB_URL}{SEARCH_ENDPOINTS[media.kind]}/"
+    url: str = f"{TMDB_URL}{SEARCH_ENDPOINTS[media.kind]}"
     headers = {
         "accept": "application/json",
         "Authorization": f"Bearer {token}"
