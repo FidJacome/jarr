@@ -10,8 +10,12 @@ Turn messy downloads into a clean, Jellyfin-ready library in one command.
 ![uv](https://img.shields.io/badge/managed%20with-uv-DE5FE9)
 ![TMDB](https://img.shields.io/badge/metadata-TMDB-01B4E4?logo=themoviedatabase&logoColor=white)
 ![Jellyfin](https://img.shields.io/badge/for-Jellyfin-AA5CC3?logo=jellyfin&logoColor=white)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
 </div>
+
+> [!WARNING]
+> **Early development.** Jarr works, but it's still rough around the edges and things may change. Feedback and ideas are very welcome. Feel free to [open an issue](https://github.com/FidJacome/jarr/issues)!
 
 ---
 
