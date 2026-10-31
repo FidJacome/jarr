@@ -19,7 +19,7 @@ Turn messy downloads into a clean, Jellyfin-ready library in one command.
 
 ---
 
-## ✨ What it does
+## What it does
 
 `Spider-Man.Across.the.Spider-Verse.2023.1080p.WEB-DL.x264.mkv` becomes
 
@@ -28,12 +28,12 @@ Turn messy downloads into a clean, Jellyfin-ready library in one command.
 └── Spider-Man: Across the Spider-Verse (2023).mkv
 ```
 
-- 🔍 **Identifies** the title, year, and movie/episode from the filename and its folders
-- 🎬 **Matches** it against [TMDB](https://www.themoviedb.org/) and lets you pick the right result
-- 📁 **Files it** in the folder layout Jellyfin recommends, tagged with the TMDB id so Jellyfin always matches it correctly
-- 🛡️ **Asks first**: confirms the guess before searching and never overwrites a file without your permission
+- **Identifies** the title, year, and movie/episode from the filename and its folders
+- **Matches** it against [TMDB](https://www.themoviedb.org/) and lets you pick the right result
+- **Files it** in the folder layout Jellyfin recommends, tagged with the TMDB id so Jellyfin always matches it correctly
+- **Asks first**: confirms the guess before searching and never overwrites a file without your permission
 
-## 🚀 Getting started
+## Getting started
 
 ### 1. Install
 
@@ -58,7 +58,7 @@ TMDB_TOKEN=your_read_access_token
 uv run jarr /path/to/video.mkv
 ```
 
-## 🖥️ Example
+## Example
 
 ```
 Spider-Man.Across.the.Spider-Verse.2023.1080p.mkv
@@ -75,7 +75,7 @@ Choose: 1
 ✓ ~/staging/movie/Spider-Man: Across the Spider-Verse (2023) [tmdbid-569094]/Spider-Man: Across the Spider-Verse (2023).mkv
 ```
 
-## 📂 Output layout
+## Output layout
 
 ```
 ~/staging/
@@ -94,17 +94,17 @@ Logs are written to `~/.local/state/jarr/jarr.log`.
 
 ## 🗺️ Roadmap
 
-### ✅ Phase 1: Identify, match, and rename
+### Phase 1: Identify, match, and rename
 
 - [x] Identify the title, year, type of content, and file type from the raw filename
 - [x] Query TMDB for real content matching the identified parameters
 - [x] Rename the file and place it in Jellyfin's recommended folder tree
 
-### 🚧 Phase 2: Send to the media server
+### Phase 2: Send to the media server
 
 - [ ] Automatically move the file into the Jellyfin server
 
-### 🚧 Phase 3: Subtitles
+### Phase 3: Subtitles
 
 - [ ] Identify and automatically download subtitles in the desired language
 
