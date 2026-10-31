@@ -1,24 +1,31 @@
+import getpass
 import logging
 import os
 import shutil
-import sys
-import requests
 from pathlib import Path
-from dotenv import load_dotenv
-from .constants import VIDEO_EXTENSIONS, TMDB_URL, SEARCH_ENDPOINTS
+
+from dotenv import load_dotenv, set_key
+
+from .cli import parse_args
+from .constants import ENV_PATH, VIDEO_EXTENSIONS
 from .media import Media
-from .tmdbmatch import TMDBMatch
-from .query_ops import TMDB_query, TMDB_select, TMDBError, NoMatchError
-from .style import bold, dim, red, green, yellow, short_path
+from .query_ops import NoMatchError, TMDB_query, TMDB_select, TMDBError
+from .style import bold, dim, green, red, short_path, yellow
+
 logger = logging.getLogger(__name__)
 
-USAGE = "Usage: jarr <video file>"
-LOG_FILE = Path(os.getenv("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "jarr" / "jarr.log"
+LOG_FILE = (
+    Path(os.getenv("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    / "jarr"
+    / "jarr.log"
+)
+
 
 class UnsupportedFileError(ValueError):
     def __init__(self, path):
         self.path = path
         super().__init__(f"{path.suffix} is not a supported file type: {path}")
+
 
 def ask(prompt: str, choices: list[str], default: str) -> str:
     while True:
@@ -27,24 +34,59 @@ def ask(prompt: str, choices: list[str], default: str) -> str:
             return answer
         print(yellow(f"Please answer one of: {', '.join(choices)}"))
 
+
 def main() -> int:
-    if len(sys.argv) != 2 or sys.argv[1] in ("-h", "--help"):
-        print(USAGE)
-        return 2
+    args = parse_args()
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    log_file = logging.FileHandler(LOG_FILE)
+    log_file.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    console = logging.StreamHandler()
+    console.setFormatter(logging.Formatter(f"{red('Error:')} %(message)s"))
+    console.setLevel(logging.ERROR)
+    logging.basicConfig(level=logging.INFO, handlers=[log_file, console])
 
     try:
-        load_dotenv()
+        load_dotenv(ENV_PATH)
         token = os.getenv("TMDB_TOKEN")
-        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        log_file = logging.FileHandler(LOG_FILE)
-        log_file.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-        console = logging.StreamHandler()
-        console.setFormatter(logging.Formatter(f"{red('Error:')} %(message)s"))
-        console.setLevel(logging.ERROR)
-        logging.basicConfig(level=logging.INFO, handlers=[log_file, console])
+        try:
+            if not token or args.set_token:
+                ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
+                token = getpass.getpass(
+                    dim("Please enter your TMDB API Read Access Token: ")
+                ).strip()
+                if not token:
+                    logger.error("No token entered")
+                    return 1
+                set_key(ENV_PATH, "TMDB_TOKEN", token)
+        except OSError as e:
+            logger.error("Couldn't save the token to %s: %s", ENV_PATH, e)
 
         try:
-            file_path: "Path" = Path(sys.argv[1])
+            if not os.getenv("DEFAULT_DIR"):
+                temp_def = Path.home() / "staging"
+                set_key(ENV_PATH, "DEFAULT_DIR", temp_def.as_posix())
+        except OSError as e:
+            logger.error("Couldn't set default directory to %s: %s", ENV_PATH, e)
+            if not args.destination_path:
+                destination = temp_def
+            else:
+                destination = args.destination_path
+
+        try:
+            if args.default:
+                set_key(ENV_PATH, "DEFAULT_DIR", args.destination_path.resolve())
+        except OSError as e:
+            logger.error(
+                "Couldn't set default directory to %s: %s", args.destination_path, e
+            )
+
+        # TODO(human): decide the base folder that movie/ and tv/ go into.
+        # Available: args.destination_path (Path or None), args.default (bool),
+        # os.getenv("JARR_DESTINATION") (saved default or None), and
+        # set_key(ENV_PATH, "JARR_DESTINATION", ...) to save a new default.
+
+        try:
+            file_path: "Path" = Path(args.file)
             if file_path.suffix.lower() not in VIDEO_EXTENSIONS:
                 raise UnsupportedFileError(file_path)
             file_path = file_path.resolve(strict=True)
@@ -61,16 +103,27 @@ def main() -> int:
             logger.error("Failed to identify: %s", e)
             return 1
 
-        if media.kind == "episode" and not (isinstance(media.season, int) and isinstance(media.episode, int)):
+        if media.kind == "episode" and not (
+            isinstance(media.season, int) and isinstance(media.episode, int)
+        ):
             logger.error("Couldn't detect season and episode numbers for %s", file_path)
             return 1
 
         year = f" ({media.year})" if media.year else ""
-        kind = f"TV · S{media.season:02d}E{media.episode:02d}" if media.kind == "episode" else "Movie"
+        kind = (
+            f"TV · S{media.season:02d}E{media.episode:02d}"
+            if media.kind == "episode"
+            else "Movie"
+        )
         print(dim(file_path.name))
         print(f"{bold(media.title)}{year}  {dim(kind)}")
-        answer = ask(f"Search TMDB? {dim('[Y]es / [l]oose (ignore year) / [n]o')} ", ["y", "l", "n"], "y")
-        if answer == "n": raise KeyboardInterrupt
+        answer = ask(
+            f"Search TMDB? {dim('[Y]es / [l]oose (ignore year) / [n]o')} ",
+            ["y", "l", "n"],
+            "y",
+        )
+        if answer == "n":
+            raise KeyboardInterrupt
 
         try:
             print(dim("Searching TMDB..."))
@@ -80,7 +133,8 @@ def main() -> int:
                 print(dim("Searching TMDB, ignoring the year..."))
                 tmdb_results = TMDB_query(media, True, token)
                 option = TMDB_select(tmdb_results)
-            if option == -1: raise KeyboardInterrupt
+            if option == -1:
+                raise KeyboardInterrupt
         except TMDBError as e:
             logger.error(e)
             return 1
@@ -93,11 +147,18 @@ def main() -> int:
         folder_name = f"{title} ({selection.year}) [tmdbid-{selection.id}]"
 
         if media.kind == "movie":
-            target_path = file_path.home() / "staging" / "movie" / folder_name
-            new_file_path = target_path / f"{title} ({selection.year}){file_path.suffix}"
+            target_path = destination / "movie" / folder_name
+            new_file_path = (
+                target_path / f"{title} ({selection.year}){file_path.suffix}"
+            )
         elif media.kind == "episode":
-            target_path = file_path.home() / "staging" / "tv" / folder_name / f"Season {media.season:02d}"
-            new_file_path = target_path / f"{title} S{media.season:02d}E{media.episode:02d}{file_path.suffix}"
+            target_path = (
+                destination / "tv" / folder_name / f"Season {media.season:02d}"
+            )
+            new_file_path = (
+                target_path
+                / f"{title} S{media.season:02d}E{media.episode:02d}{file_path.suffix}"
+            )
 
         if new_file_path.exists():
             print(yellow(f"{short_path(new_file_path)} already exists."))
@@ -109,6 +170,7 @@ def main() -> int:
         shutil.move(file_path, new_file_path)
         logger.info("Moved %s -> %s", file_path, new_file_path)
         print(f"{green('✓')} {short_path(new_file_path)}")
+        return 0
     except UnsupportedFileError as e:
         logger.error("%s", e)
         return 1
