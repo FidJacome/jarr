@@ -61,29 +61,23 @@ def main() -> int:
         except OSError as e:
             logger.error("Couldn't save the token to %s: %s", ENV_PATH, e)
 
-        try:
-            if not os.getenv("DEFAULT_DIR"):
-                temp_def = Path.home() / "staging"
-                set_key(ENV_PATH, "DEFAULT_DIR", temp_def.as_posix())
-        except OSError as e:
-            logger.error("Couldn't set default directory to %s: %s", ENV_PATH, e)
-            if not args.destination_path:
-                destination = temp_def
-            else:
-                destination = args.destination_path
+        # Destination path selection
+
+        destination = Path.home() / "staging"
+
+        if os.getenv("DEFAULT_DIR"):
+            destination = Path(os.getenv("DEFAULT_DIR"))
 
         try:
-            if args.default:
-                set_key(ENV_PATH, "DEFAULT_DIR", args.destination_path.resolve())
+            if args.default and args.destination_path:
+                set_key(
+                    ENV_PATH, "DEFAULT_DIR", args.destination_path.resolve().as_posix()
+                )
         except OSError as e:
-            logger.error(
-                "Couldn't set default directory to %s: %s", args.destination_path, e
-            )
+            logger.error("Couldn't save the new default path: %s", e)
 
-        # TODO(human): decide the base folder that movie/ and tv/ go into.
-        # Available: args.destination_path (Path or None), args.default (bool),
-        # os.getenv("JARR_DESTINATION") (saved default or None), and
-        # set_key(ENV_PATH, "JARR_DESTINATION", ...) to save a new default.
+        if args.destination_path:
+            destination = args.destination_path.resolve()
 
         try:
             file_path: "Path" = Path(args.file)
