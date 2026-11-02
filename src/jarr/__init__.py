@@ -46,6 +46,16 @@ def save_setting(key: str, value: str) -> bool:
         return False
 
 
+def ask_token() -> str | None:
+    token = getpass.getpass(
+        dim("Please enter your TMDB API Read Access Token: ")
+    ).strip()
+    if not token:
+        logger.error("No token entered")
+        return None
+    return token
+
+
 def main() -> int:
     args = parse_args()
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -59,8 +69,18 @@ def main() -> int:
     try:
         load_dotenv(ENV_PATH)
 
+        if args.set_token and not args.file:
+            token = ask_token()
+            if not token:
+                return 1
+            return 0 if save_setting("TMDB_TOKEN", token) else 1
+
         args.file = args.file.expanduser()
         if args.default and args.file.is_dir() and not args.destination_path:
+            if args.set_token:
+                token = ask_token()
+                if not token or not save_setting("TMDB_TOKEN", token):
+                    return 1
             if save_setting("DEFAULT_DIR", args.file.resolve().as_posix()):
                 return 0
             logger.error("Failed to set default directory.")
@@ -86,13 +106,10 @@ def main() -> int:
         # TMDB Token request
         token = os.getenv("TMDB_TOKEN")
         if not token or args.set_token:
-            token = getpass.getpass(
-                dim("Please enter your TMDB API Read Access Token: ")
-            ).strip()
+            token = ask_token()
             if not token:
-                logger.error("No token entered")
                 return 1
-            save_setting("TMDB_TOKEN", token)
+            save_setting("TMDB_TOKEN", token)  # if this fails, still use the token for this run
 
         # Destination path selection
 
