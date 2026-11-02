@@ -43,13 +43,14 @@ cd jarr
 uv sync
 ```
 
-### 2. Add your TMDB token
+### 2. Get a TMDB token
 
-Create a free account at [TMDB](https://www.themoviedb.org/), then copy your **API Read Access Token** from
-[Settings → API](https://www.themoviedb.org/settings/api) into a `.env` file in the project root:
+Create a free account at [TMDB](https://www.themoviedb.org/) and copy your **API Read Access Token** from
+[Settings → API](https://www.themoviedb.org/settings/api). Jarr asks for it on the first run and saves it to
+`~/.config/jarr/.env`. You can also set it ahead of time:
 
-```env
-TMDB_TOKEN=your_read_access_token
+```bash
+uv run jarr -t
 ```
 
 ### 3. Run it
@@ -57,6 +58,19 @@ TMDB_TOKEN=your_read_access_token
 ```bash
 uv run jarr /path/to/video.mkv
 ```
+
+## Options
+
+| Command | What it does |
+|---|---|
+| `jarr <video>` | Identify the video and move it to the default folder (`~/staging` unless you change it) |
+| `jarr <video> <folder>` | Same, but move it to `<folder>` this time only |
+| `jarr -d <video> <folder>` | Move it to `<folder>` and make that the new default |
+| `jarr -d <folder>` | Set the default folder without processing a video |
+| `jarr -t` | Set or change your TMDB token |
+| `jarr -t <video>` | Change the token, then process the video |
+
+Settings are stored in `~/.config/jarr/.env`. A `TMDB_TOKEN` environment variable takes precedence over the saved token.
 
 ## Example
 
