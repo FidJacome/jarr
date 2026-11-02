@@ -35,6 +35,17 @@ def ask(prompt: str, choices: list[str], default: str) -> str:
         print(yellow(f"Please answer one of: {', '.join(choices)}"))
 
 
+def save_setting(key: str, value: str) -> bool:
+    try:
+        ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
+        set_key(ENV_PATH, key, value)
+        print(f"Setting {key} set successfully.")
+        return True
+    except OSError as e:
+        logger.error("Couldn't save %s to %s: %s", key, ENV_PATH, e)
+        return False
+
+
 def main() -> int:
     args = parse_args()
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -47,6 +58,17 @@ def main() -> int:
 
     try:
         load_dotenv(ENV_PATH)
+
+        args.file = args.file.expanduser()
+        if args.default and args.file.is_dir() and not args.destination_path:
+            if save_setting("DEFAULT_DIR", args.file.resolve().as_posix()):
+                return 0
+            logger.error("Failed to set default directory.")
+            return 1
+
+        if args.default and args.file.is_file() and not args.destination_path:
+            logger.error("Default directory cannot be empty.")
+            return 1
 
         # Checks if args.file is a file, is a supported video type and it exists.
         try:
@@ -61,19 +83,16 @@ def main() -> int:
         if args.file.suffix.lower() not in VIDEO_EXTENSIONS:
             raise UnsupportedFileError(args.file)
 
+        # TMDB Token request
         token = os.getenv("TMDB_TOKEN")
-        try:
-            if not token or args.set_token:
-                ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
-                token = getpass.getpass(
-                    dim("Please enter your TMDB API Read Access Token: ")
-                ).strip()
-                if not token:
-                    logger.error("No token entered")
-                    return 1
-                set_key(ENV_PATH, "TMDB_TOKEN", token)
-        except OSError as e:
-            logger.error("Couldn't save the token to %s: %s", ENV_PATH, e)
+        if not token or args.set_token:
+            token = getpass.getpass(
+                dim("Please enter your TMDB API Read Access Token: ")
+            ).strip()
+            if not token:
+                logger.error("No token entered")
+                return 1
+            save_setting("TMDB_TOKEN", token)
 
         # Destination path selection
 
@@ -83,7 +102,7 @@ def main() -> int:
             destination = Path(os.getenv("DEFAULT_DIR"))
 
         if args.destination_path:
-            destination = args.destination_path
+            destination = args.destination_path.expanduser()
 
         # Check if destination is valid
         try:
@@ -92,11 +111,8 @@ def main() -> int:
             logger.error("Can't use %s as destination directory: %s", destination, e)
             return 1
 
-        try:
-            if args.default and args.destination_path:
-                set_key(ENV_PATH, "DEFAULT_DIR", destination.resolve().as_posix())
-        except OSError as e:
-            logger.error("Couldn't save the new default path: %s", e)
+        if args.default and args.destination_path:
+            save_setting("DEFAULT_DIR", destination.resolve().as_posix())
 
         try:
             file_path: "Path" = Path(args.file)
