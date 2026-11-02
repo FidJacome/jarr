@@ -47,6 +47,20 @@ def main() -> int:
 
     try:
         load_dotenv(ENV_PATH)
+
+        # Checks if args.file is a file, is a supported video type and it exists.
+        try:
+            args.file.resolve(strict=True)
+            if args.file.is_dir():
+                logger.error("Directory was passed, you must provide a file.")
+                return 1
+        except OSError as e:
+            logger.error("Can't use %s file: %s", args.file, e)
+            return 1
+
+        if args.file.suffix.lower() not in VIDEO_EXTENSIONS:
+            raise UnsupportedFileError(args.file)
+
         token = os.getenv("TMDB_TOKEN")
         try:
             if not token or args.set_token:
@@ -68,21 +82,24 @@ def main() -> int:
         if os.getenv("DEFAULT_DIR"):
             destination = Path(os.getenv("DEFAULT_DIR"))
 
+        if args.destination_path:
+            destination = args.destination_path
+
+        # Check if destination is valid
+        try:
+            destination.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            logger.error("Can't use %s as destination directory: %s", destination, e)
+            return 1
+
         try:
             if args.default and args.destination_path:
-                set_key(
-                    ENV_PATH, "DEFAULT_DIR", args.destination_path.resolve().as_posix()
-                )
+                set_key(ENV_PATH, "DEFAULT_DIR", destination.resolve().as_posix())
         except OSError as e:
             logger.error("Couldn't save the new default path: %s", e)
 
-        if args.destination_path:
-            destination = args.destination_path.resolve()
-
         try:
             file_path: "Path" = Path(args.file)
-            if file_path.suffix.lower() not in VIDEO_EXTENSIONS:
-                raise UnsupportedFileError(file_path)
             file_path = file_path.resolve(strict=True)
         except FileNotFoundError:
             logger.error("File %s not found.", file_path)

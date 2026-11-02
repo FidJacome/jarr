@@ -6,7 +6,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="jarr", description="The Jellyfin companion CLI tool"
     )
-    parser.add_argument("file", help="Video file to identify and rename")
+    parser.add_argument("file", type=Path, help="Video file to identify and rename")
     parser.add_argument(
         "-t",
         "--set-token",
