@@ -4,14 +4,12 @@ import os
 import shutil
 from pathlib import Path
 
-from dotenv import load_dotenv, set_key
-
 from .cli import parse_args
+from .config import load_config, save_config
 from .constants import ENV_PATH, LOG_FILE, VIDEO_EXTENSIONS
 from .media import Media
 from .query_ops import NoMatchError, TMDB_query, TMDB_select, TMDBError
 from .style import bold, dim, green, red, short_path, yellow
-from .config import load_config, save_config
 
 logger = logging.getLogger(__name__)
 
