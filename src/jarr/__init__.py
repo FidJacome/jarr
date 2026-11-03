@@ -7,18 +7,13 @@ from pathlib import Path
 from dotenv import load_dotenv, set_key
 
 from .cli import parse_args
-from .constants import ENV_PATH, VIDEO_EXTENSIONS
+from .constants import ENV_PATH, LOG_FILE, VIDEO_EXTENSIONS
 from .media import Media
 from .query_ops import NoMatchError, TMDB_query, TMDB_select, TMDBError
 from .style import bold, dim, green, red, short_path, yellow
+from .config import load_config, save_config
 
 logger = logging.getLogger(__name__)
-
-LOG_FILE = (
-    Path(os.getenv("XDG_STATE_HOME") or Path.home() / ".local" / "state")
-    / "jarr"
-    / "jarr.log"
-)
 
 
 class UnsupportedFileError(ValueError):
@@ -67,21 +62,24 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, handlers=[log_file, console])
 
     try:
-        load_dotenv(ENV_PATH)
+        config = load_config()
 
         if args.set_token and not args.file:
             token = ask_token()
             if not token:
                 return 1
-            return 0 if save_setting("TMDB_TOKEN", token) else 1
+            config.setdefault("tmdb", {}).setdefault("token", token)
+            return 0 if save_config(config) else 1
 
         args.file = args.file.expanduser()
         if args.default and args.file.is_dir() and not args.destination_path:
             if args.set_token:
                 token = ask_token()
-                if not token or not save_setting("TMDB_TOKEN", token):
+                config.setdefault("tmdb", {}).setdefault("token", token)
+                if not token or not save_config(config):
                     return 1
-            if save_setting("DEFAULT_DIR", args.file.resolve().as_posix()):
+            config.setdefault("default_dir", args.file.resolve().as_posix())
+            if save_config(config):
                 return 0
             logger.error("Failed to set default directory.")
             return 1
@@ -104,19 +102,19 @@ def main() -> int:
             raise UnsupportedFileError(args.file)
 
         # TMDB Token request
-        token = os.getenv("TMDB_TOKEN")
+        token = config.get("tmdb", {}).get("token")
         if not token or args.set_token:
             token = ask_token()
             if not token:
                 return 1
-            save_setting("TMDB_TOKEN", token)  # if this fails, still use the token for this run
+            config.setdefault("tmdb", {}).setdefault("token", token)
 
         # Destination path selection
 
         destination = Path.home() / "staging"
 
-        if os.getenv("DEFAULT_DIR"):
-            destination = Path(os.getenv("DEFAULT_DIR"))
+        if config.get("default_dir"):
+            destination = Path(config.get("default_dir"))
 
         if args.destination_path:
             destination = args.destination_path.expanduser()
