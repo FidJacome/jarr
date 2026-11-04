@@ -17,7 +17,11 @@ moves it into Jellyfin's recommended folder layout (`movie/Title (Year) [tmdbid-
 
 - Python ≥ 3.13, managed with **uv** (`uv sync`, `uv run jarr <video>`)
 - Entry point: `jarr = "jarr:main"` → `src/jarr/__init__.py`
-- Dependencies: guessit, requests, tomli-w (python-dotenv is being phased out)
+- Dependencies: guessit, requests, tomli-w
+- Tests: `uv run tests/run_tests.py` (44 end-to-end scenarios; see Testing below)
+- Practice exercises and prototypes live in a separate **private** repo, `FidJacome/jarr-practice`, cloned next to
+  this one (`~/code/jarr-practice`: `practice/` lessons, `prototypes/` drafts of jarr functions). Keep them out of
+  this public repo.
 
 ### Layout (`src/jarr/`)
 
@@ -25,8 +29,8 @@ moves it into Jellyfin's recommended folder layout (`movie/Title (Year) [tmdbid-
 |---|---|
 | `__init__.py` | `main()`: arg handling, token/destination logic, the identify → search → move flow |
 | `cli.py` | argparse definition (`file`, `destination_path`, `-t`, `-d`) |
-| `config.py` | `load_config()` / `save_config()` for `$XDG_CONFIG_HOME/jarr/config.toml` (chmod 600) |
-| `constants.py` | Video extensions, TMDB URL, `LOG_FILE`, `CONFIG_DIR` (and legacy `ENV_PATH`) |
+| `config.py` | `load_config()` / `save_config()` for `$XDG_CONFIG_HOME/jarr/config.toml` (chmod 600), `set_config(config, *keys, value)` for nested keys in memory |
+| `constants.py` | Video extensions, TMDB URL, `LOG_FILE`, `CONFIG_DIR` |
 | `media.py` | `Media.from_path()`: parses filename/folders into title, year, kind, season, episode |
 | `query_ops.py` | `TMDB_query`, `TMDB_select`, `TMDBError`, `NoMatchError` |
 | `tmdbmatch.py` | TMDB result model |
@@ -37,37 +41,49 @@ moves it into Jellyfin's recommended folder layout (`movie/Title (Year) [tmdbid-
 - Logs go to `$XDG_STATE_HOME/jarr/jarr.log`; console only shows errors.
 - `main()` returns exit codes (0 ok, 1 error, 130 cancelled).
 - Commits: descriptive body; WIP commits list known issues so they serve as handoff notes.
+- Settings: change the dict with `set_config`, then call `save_config` once and decide per caller what a failed save
+  means. Priority: `TMDB_TOKEN` env var > saved token > prompt; typed folder > saved `default_dir` > `~/staging`.
+  Env tokens are never written to disk.
 - Releases bump `pyproject.toml` version and update the README.
+- Versioning: SemVer, staying on 0.x for now (a breaking change bumps the middle number). Annotated tags; GitHub
+  releases for 0.x are marked **pre-release** and get hand-written, user-facing notes.
+
+### Testing
+
+`tests/run_tests.py` runs each scenario through `jarr.main()` in a throwaway home (`tests/homes/`, gitignored), with
+TMDB, `input()` and `getpass()` faked by `tests/harness.py`. Checks look at outcomes (exit code, `config.toml`
+contents, where the video ended up), never message wording. `V=1` prints passing output too; `KEEP=1` keeps the
+temp homes. Run the suite after every change to `main()`; add a scenario for each bug fixed.
 
 ## Current status
 
-_Last updated: 2026-11-03_
+_Last updated: 2026-11-04_
 
-**Branch:** `feature/subcommands`. Migrating settings from `~/.config/jarr/.env` to `config.toml`. The subcommands
-redesign the branch is named for hasn't been planned in detail yet.
+**Branch:** `feature/subcommands` (pushed). v0.2.0 is the latest release.
 
-Done: `config.py` (load/save), `LOG_FILE`/`CONFIG_DIR` moved to `constants.py`, `main()` now reads from `config.toml`.
+Done on this branch:
+- Settings moved from `~/.config/jarr/.env` to `config.toml` (`c963398`). `python-dotenv` and `ENV_PATH` removed.
+  **No migration from `.env`** (deliberate: sole user, settings trivial to re-enter); the README has an
+  "Upgrading from 0.2.0" note instead.
+- Tests moved into the repo as `tests/` (`9537fdf`), 44/44 passing.
 
-**In progress: the `set_config(config, *keys, value)` helper** in `protoypes/set_config.py` (folder name has a typo).
-It's meant to set a possibly nested key, e.g. `set_config(cfg, "tmdb", "token", value=tok)`, and then go into
-`config.py`. Agreed design:
-- Only modify the dict passed in; `save_config()` is called separately.
-- Keep a "current position" variable starting at `config`. For each key in `keys[:-1]`, step down with
-  `current = current.setdefault(key, {})`. After the loop, assign `current[keys[-1]] = value`. Plain assignment
-  handles both new and existing keys, so no `.get()` check is needed.
-- Raise `ValueError` on empty `keys`. Drop the unused `tomllib`/`tomli_w` imports and add type hints.
-- Test cases: `{}` + `("tmdb","token")`; `{"tmdb":{"token":"old"}}` + same keys (overwrites); `{}` + `("default_dir",)`.
-- The current draft still uses an undefined `i` and assigns the next key name as a value; it doesn't run yet.
+**Release decision:** no release yet. **v0.3.0 = config.toml + subcommands**, released together.
 
-Once it works, use it for items 1–3 below.
+**Next: plan the subcommands** (design agreed earlier, details still to plan):
+- `jarr prep <video> [folder]` is the main command; `jarr <video> [folder]` stays as a shortcut for it.
+- `jarr config token`, `jarr config dir <folder>`, `jarr config show` (token masked), `jarr config path`.
+- `-t`/`-d` get removed. Planned layout: `cli.py` (dispatch), `commands/prep.py`, `commands/config.py`.
+- Then update the tests and README, and release v0.3.0 with "Upgrading from 0.2.0" notes.
 
-Note: `__init__.py` no longer imports `dotenv`, but `save_setting()` still calls `set_key`, so `-d <video> <folder>`
-crashes with a `NameError` until item 3 is done.
+Optional improvements noted along the way:
+- `save_config`: write to a temp file and `Path.replace()` it (atomic write), and create it as 0600 from the start
+  (`os.open`) instead of `chmod` afterwards.
+- `jarr -t` succeeds silently; a short "Token saved." message would help.
 
-Open items:
-1. `setdefault()` on token/default_dir values means `-t` and `-d` can't change an existing value (assign instead).
-2. A token entered during a normal run is never saved (no `save_config()` call on that path).
-3. `-d <video> <folder>` still saves via the old `save_setting()` (.env).
-4. Restore the `TMDB_TOKEN` env var override (it should take precedence over the saved token).
-5. Remove the `dotenv` import, `ENV_PATH`, `save_setting`, and probably the `python-dotenv` dependency.
-6. Update the README (it still says settings live in `.env`).
+### Learning notes
+
+- Fidel learns best with **pseudocode first** and concrete analogies (nested dicts = folder tree, `current_pos` =
+  current directory), plus hand-traced tables. Introduce new concepts with a short lesson + exercise before using them.
+- Lessons done: file I/O, TOML (`tomllib`/`tomli_w`), dict walking. A 5-part dictionary exercise set
+  (`.get`, comprehensions, copy vs reference, `setdefault`/`get_config`, recursion/`flatten`) was handed out on
+  2026-11-04; status unknown. `get_config` and `flatten` + `mask` feed into `jarr config show`.
