@@ -37,3 +37,17 @@ def save_config(config: dict) -> bool:
     except OSError as e:
         logger.error("Couldn't write to config.toml: %s", e)
         return False
+
+
+def set_config(config: dict, *keys: str, value) -> None:
+    """Changes the dictionary directly"""
+    if len(keys) == 0:
+        raise ValueError("The function needs at least one key to change.")
+
+    current_pos: dict = config
+
+    for key in keys[:-1]:
+        current_pos.setdefault(key, {})
+        current_pos = current_pos[key]
+
+    current_pos[keys[-1]] = value

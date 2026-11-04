@@ -47,7 +47,7 @@ uv sync
 
 Create a free account at [TMDB](https://www.themoviedb.org/) and copy your **API Read Access Token** from
 [Settings → API](https://www.themoviedb.org/settings/api). Jarr asks for it on the first run and saves it to
-`~/.config/jarr/.env`. You can also set it ahead of time:
+`~/.config/jarr/config.toml`. You can also set it ahead of time:
 
 ```bash
 uv run jarr -t
@@ -70,7 +70,22 @@ uv run jarr /path/to/video.mkv
 | `jarr -t` | Set or change your TMDB token |
 | `jarr -t <video>` | Change the token, then process the video |
 
-Settings are stored in `~/.config/jarr/.env`. A `TMDB_TOKEN` environment variable takes precedence over the saved token.
+### Settings
+
+Settings are saved in `~/.config/jarr/config.toml` (or `$XDG_CONFIG_HOME/jarr/config.toml`), readable only by you:
+
+```toml
+default_dir = "/mnt/media"
+
+[tmdb]
+token = "your-token"
+```
+
+A `TMDB_TOKEN` environment variable takes precedence over the saved token and is never written to disk.
+
+> [!NOTE]
+> **Upgrading from 0.2.0?** Settings moved from `~/.config/jarr/.env` to `config.toml` and aren't carried over.
+> Run `jarr -t` and `jarr -d <folder>` once to set them again, then delete the old `.env`.
 
 ## Example
 

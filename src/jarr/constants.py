@@ -3,7 +3,6 @@ from pathlib import Path
 
 VIDEO_EXTENSIONS = [".mkv", ".mp4", ".avi", ".m4v", ".mov", ".webm"]
 TMDB_URL = "https://api.themoviedb.org/3/search/"
-ENV_PATH = Path(Path.home() / ".config" / "jarr" / ".env")
 SEARCH_ENDPOINTS = {
     "movie": "movie",
     "episode": "tv",

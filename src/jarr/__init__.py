@@ -5,8 +5,8 @@ import shutil
 from pathlib import Path
 
 from .cli import parse_args
-from .config import load_config, save_config
-from .constants import ENV_PATH, LOG_FILE, VIDEO_EXTENSIONS
+from .config import load_config, save_config, set_config
+from .constants import LOG_FILE, VIDEO_EXTENSIONS
 from .media import Media
 from .query_ops import NoMatchError, TMDB_query, TMDB_select, TMDBError
 from .style import bold, dim, green, red, short_path, yellow
@@ -26,17 +26,6 @@ def ask(prompt: str, choices: list[str], default: str) -> str:
         if answer in choices:
             return answer
         print(yellow(f"Please answer one of: {', '.join(choices)}"))
-
-
-def save_setting(key: str, value: str) -> bool:
-    try:
-        ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
-        set_key(ENV_PATH, key, value)
-        print(f"Setting {key} set successfully.")
-        return True
-    except OSError as e:
-        logger.error("Couldn't save %s to %s: %s", key, ENV_PATH, e)
-        return False
 
 
 def ask_token() -> str | None:
@@ -62,29 +51,36 @@ def main() -> int:
     try:
         config = load_config()
 
+        # `jarr -t`: only set the token, then exit
         if args.set_token and not args.file:
             token = ask_token()
             if not token:
                 return 1
-            config.setdefault("tmdb", {}).setdefault("token", token)
+            set_config(config, "tmdb", "token", value=token)
             return 0 if save_config(config) else 1
 
         args.file = args.file.expanduser()
+
+        # `jarr -d <folder>` (or `-t -d <folder>`): only save settings, then exit
         if args.default and args.file.is_dir() and not args.destination_path:
+            # with -t: also set the token
             if args.set_token:
                 token = ask_token()
-                config.setdefault("tmdb", {}).setdefault("token", token)
-                if not token or not save_config(config):
+                if not token:
                     return 1
-            config.setdefault("default_dir", args.file.resolve().as_posix())
+                set_config(config, "tmdb", "token", value=token)
+            set_config(config, "default_dir", value=args.file.resolve().as_posix())
             if save_config(config):
                 return 0
-            logger.error("Failed to set default directory.")
+            logger.error("Failed to save the settings")
             return 1
 
+        # `jarr -d <video>` with no folder: error
         if args.default and args.file.is_file() and not args.destination_path:
             logger.error("Default directory cannot be empty.")
             return 1
+
+        # --- Normal run: `jarr [-t] [-d] <video> [folder]` from here on ---
 
         # Checks if args.file is a file, is a supported video type and it exists.
         try:
@@ -99,21 +95,24 @@ def main() -> int:
         if args.file.suffix.lower() not in VIDEO_EXTENSIONS:
             raise UnsupportedFileError(args.file)
 
-        # TMDB Token request
-        token = config.get("tmdb", {}).get("token")
+        # TMDB Token request: ask if none is saved, or if -t was given
+        token = os.getenv("TMDB_TOKEN") or config.get("tmdb", {}).get("token")
         if not token or args.set_token:
             token = ask_token()
             if not token:
                 return 1
-            config.setdefault("tmdb", {}).setdefault("token", token)
+            set_config(config, "tmdb", "token", value=token)
+            if not save_config(config):
+                logger.error("Couldn't save token.")
 
-        # Destination path selection
-
+        # Destination path selection: typed folder > saved default > ~/staging
         destination = Path.home() / "staging"
 
+        # saved default from config.toml
         if config.get("default_dir"):
             destination = Path(config.get("default_dir"))
 
+        # `jarr <video> <folder>`: typed folder wins
         if args.destination_path:
             destination = args.destination_path.expanduser()
 
@@ -124,8 +123,11 @@ def main() -> int:
             logger.error("Can't use %s as destination directory: %s", destination, e)
             return 1
 
+        # `jarr -d <video> <folder>`: also save the typed folder as the default
         if args.default and args.destination_path:
-            save_setting("DEFAULT_DIR", destination.resolve().as_posix())
+            set_config(config, "default_dir", value=destination.resolve().as_posix())
+            if not save_config(config):
+                logger.error("Couldn't save default_dir")
 
         try:
             file_path: "Path" = Path(args.file)
