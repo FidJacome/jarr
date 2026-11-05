@@ -20,8 +20,11 @@ moves it into Jellyfin's recommended folder layout (`movie/Title (Year) [tmdbid-
 - Dependencies: guessit, requests, tomli-w
 - Tests: `uv run tests/run_tests.py` (44 end-to-end scenarios; see Testing below)
 - Practice exercises and prototypes live in a separate **private** repo, `FidJacome/jarr-practice`, cloned next to
-  this one (`~/code/jarr-practice`: `practice/` lessons, `prototypes/` drafts of jarr functions). Keep them out of
-  this public repo.
+  this one (`practice/` lessons, `prototypes/` drafts of jarr functions). Keep them out of this public repo.
+- Workspace layout: `~/code/jarr-root/` (not a git repo) holds both clones, `jarr/` and `jarr-practice/`. Sessions
+  are usually started from `jarr-root/`. Its own small `CLAUDE.md` just describes this layout and imports this file;
+  it isn't synced, so recreate it on a new device if needed. After cloning or moving folders, run `uv sync` in
+  `jarr/` (a stale venv shows up as `No module named 'jarr'`).
 
 ### Layout (`src/jarr/`)
 
@@ -57,7 +60,7 @@ temp homes. Run the suite after every change to `main()`; add a scenario for eac
 
 ## Current status
 
-_Last updated: 2026-11-04_
+_Last updated: 2026-11-05_
 
 **Branch:** `feature/subcommands` (pushed). v0.2.0 is the latest release.
 
@@ -69,7 +72,10 @@ Done on this branch:
 
 **Release decision:** no release yet. **v0.3.0 = config.toml + subcommands**, released together.
 
-**Next: plan the subcommands** (design agreed earlier, details still to plan):
+**Now: argparse lessons first** (see "argparse lesson series" below). Fidel found he can read `cli.py` but can't
+write argparse from scratch (Claude wrote `cli.py` originally), so the subcommand work waits until he can.
+
+**After that: the subcommands** (design agreed earlier, details still to plan):
 - `jarr prep <video> [folder]` is the main command; `jarr <video> [folder]` stays as a shortcut for it.
 - `jarr config token`, `jarr config dir <folder>`, `jarr config show` (token masked), `jarr config path`.
 - `-t`/`-d` get removed. Planned layout: `cli.py` (dispatch), `commands/prep.py`, `commands/config.py`.
@@ -87,3 +93,34 @@ Optional improvements noted along the way:
 - Lessons done: file I/O, TOML (`tomllib`/`tomli_w`), dict walking. A 5-part dictionary exercise set
   (`.get`, comprehensions, copy vs reference, `setdefault`/`get_config`, recursion/`flatten`) was handed out on
   2026-11-04; status unknown. `get_config` and `flatten` + `mask` feed into `jarr config show`.
+- Lesson format that works: verify every example by actually running it and show real output; ask for written
+  predictions before running; exercises are written from an empty file in `jarr-practice/practice/`.
+
+### argparse lesson series (in progress)
+
+| # | Topic | Exercise (in `jarr-practice/practice/`) | Status |
+|---|---|---|---|
+| 1 | describe vs parse (`parser` = blank form, `args` = filled form), positionals, `Namespace`, `type=`, free `--help`, exit code 2 | `argparse_1.py`: `repeat <word> <times>` | ✅ done |
+| 2 | `nargs="?"` + `default` (no default → `None`), options `-s/--sep`, `store_true` flags, dashes → underscores, usage notation, `parser.error()` | `argparse_2.py`: `word [times] [-s SEP] [-u]` | ✅ done |
+| 3 | `parse_args(argv=None)` + `parse_args(list)`, `if __name__ == "__main__":`, errors raise `SystemExit` (not an `Exception`), `assert`, plain vs relative imports | `test_argparse2.py` with an `exit_code(argv)` helper | ✅ done, tests pass |
+| 4 | functions as values: name vs call `()`, dispatch dict, passing functions (`type=int`), "`'str' object is not callable`" | `calc.py`, see below | ⏳ handed out, **not started** |
+| 5 | subcommands: `add_subparsers(dest=..., required=True)`, `add_parser`, nesting, `set_defaults(func=...)` + `args.func(args)`, the `jarr <video>` shortcut (insert `"prep"` into argv before parsing) | `subcommands.py`: jarr's CLI shape with print-only commands | not yet |
+
+After lesson 5, Fidel writes jarr's new `cli.py` himself.
+
+**Exercise 4 as handed out:**
+- Part A, predict then run, with `def double(n): return n * 2` and `ops = {"double": double}`:
+  `print(double)`, `print(double(4))`, `f = double; print(f(5))`, `print(ops["double"](3))`, `print(ops["double"])`,
+  `g = double(2); print(g(2))`.
+- Part B, `calc.py`: functions `add`/`sub`/`mul(a, b)` that return; `OPS = {"add": add, "sub": sub, "mul": mul}`;
+  `parse_args(argv=None)` with positionals `op` (new: `choices=list(OPS)`), `a` and `b` (`type=float`); under the
+  main guard, look up and call the function from `OPS`, with no `if`/`elif` on the op name. Expected:
+  `add 2 3` → `5.0`, `mul 4 2.5` → `10.0`, `div 1 2` → "invalid choice".
+- Bonus: add `div`, count how many lines it took; what happens with `div 1 0` and where to handle it.
+
+Lesson 4 context: Fidel's earlier `subcommands.py` attempt (deleted/abandoned) used `set_defaults(func=print(...))`
+and `prep.file`, i.e. calling instead of passing a function, and reading values from the parser instead of `args`.
+Both were explained in lessons 1 and 4.
+
+Notes from his exercises: `argparse_1.py` predicted `int("three")` → 3 (it fails); `argparse_2.py` uppercases
+after joining, so the separator is uppercased too (left as a discussion point).
