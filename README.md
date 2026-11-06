@@ -47,10 +47,10 @@ uv sync
 
 Create a free account at [TMDB](https://www.themoviedb.org/) and copy your **API Read Access Token** from
 [Settings → API](https://www.themoviedb.org/settings/api). Jarr asks for it on the first run and saves it to
-`~/.config/jarr/.env`. You can also set it ahead of time:
+`~/.config/jarr/config.toml`. You can also set it ahead of time:
 
 ```bash
-uv run jarr -t
+uv run jarr config token
 ```
 
 ### 3. Run it
@@ -59,18 +59,38 @@ uv run jarr -t
 uv run jarr /path/to/video.mkv
 ```
 
-## Options
+## Commands
 
 | Command | What it does |
 |---|---|
-| `jarr <video>` | Identify the video and move it to the default folder (`~/staging` unless you change it) |
-| `jarr <video> <folder>` | Same, but move it to `<folder>` this time only |
-| `jarr -d <video> <folder>` | Move it to `<folder>` and make that the new default |
-| `jarr -d <folder>` | Set the default folder without processing a video |
-| `jarr -t` | Set or change your TMDB token |
-| `jarr -t <video>` | Change the token, then process the video |
+| `jarr prep <video>` | Identify the video and move it to the default folder (`~/staging` unless you change it) |
+| `jarr prep <video> <folder>` | Same, but move it to `<folder>` this time only |
+| `jarr <video> [folder]` | Shortcut for `jarr prep` |
+| `jarr config token` | Set or change your TMDB token |
+| `jarr config dir <folder>` | Set the default folder (offers to create it if it doesn't exist) |
+| `jarr config show` | Show your saved settings (the token is masked) |
+| `jarr config path` | Show where the settings file is |
 
-Settings are stored in `~/.config/jarr/.env`. A `TMDB_TOKEN` environment variable takes precedence over the saved token.
+Add `--help` to any command for details, e.g. `jarr config --help`.
+
+### Settings
+
+Settings are saved in `~/.config/jarr/config.toml` (or `$XDG_CONFIG_HOME/jarr/config.toml`), readable only by you:
+
+```toml
+default_dir = "/mnt/media"
+
+[tmdb]
+token = "your-token"
+```
+
+A `TMDB_TOKEN` environment variable takes precedence over the saved token and is never written to disk.
+
+> [!NOTE]
+> **Upgrading from 0.2.0?**
+> - The `-t` and `-d` options were replaced by `jarr config token` and `jarr config dir <folder>`.
+> - Settings moved from `~/.config/jarr/.env` to `config.toml` and aren't carried over. Run `jarr config token`
+>   and `jarr config dir <folder>` once to set them again, then delete the old `.env`.
 
 ## Example
 
