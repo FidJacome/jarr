@@ -50,7 +50,7 @@ Create a free account at [TMDB](https://www.themoviedb.org/) and copy your **API
 `~/.config/jarr/config.toml`. You can also set it ahead of time:
 
 ```bash
-uv run jarr -t
+uv run jarr config token
 ```
 
 ### 3. Run it
@@ -59,16 +59,19 @@ uv run jarr -t
 uv run jarr /path/to/video.mkv
 ```
 
-## Options
+## Commands
 
 | Command | What it does |
 |---|---|
-| `jarr <video>` | Identify the video and move it to the default folder (`~/staging` unless you change it) |
-| `jarr <video> <folder>` | Same, but move it to `<folder>` this time only |
-| `jarr -d <video> <folder>` | Move it to `<folder>` and make that the new default |
-| `jarr -d <folder>` | Set the default folder without processing a video |
-| `jarr -t` | Set or change your TMDB token |
-| `jarr -t <video>` | Change the token, then process the video |
+| `jarr prep <video>` | Identify the video and move it to the default folder (`~/staging` unless you change it) |
+| `jarr prep <video> <folder>` | Same, but move it to `<folder>` this time only |
+| `jarr <video> [folder]` | Shortcut for `jarr prep` |
+| `jarr config token` | Set or change your TMDB token |
+| `jarr config dir <folder>` | Set the default folder (offers to create it if it doesn't exist) |
+| `jarr config show` | Show your saved settings (the token is masked) |
+| `jarr config path` | Show where the settings file is |
+
+Add `--help` to any command for details, e.g. `jarr config --help`.
 
 ### Settings
 
@@ -84,8 +87,10 @@ token = "your-token"
 A `TMDB_TOKEN` environment variable takes precedence over the saved token and is never written to disk.
 
 > [!NOTE]
-> **Upgrading from 0.2.0?** Settings moved from `~/.config/jarr/.env` to `config.toml` and aren't carried over.
-> Run `jarr -t` and `jarr -d <folder>` once to set them again, then delete the old `.env`.
+> **Upgrading from 0.2.0?**
+> - The `-t` and `-d` options were replaced by `jarr config token` and `jarr config dir <folder>`.
+> - Settings moved from `~/.config/jarr/.env` to `config.toml` and aren't carried over. Run `jarr config token`
+>   and `jarr config dir <folder>` once to set them again, then delete the old `.env`.
 
 ## Example
 
