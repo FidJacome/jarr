@@ -60,7 +60,7 @@ temp homes. Run the suite after every change to `main()`; add a scenario for eac
 
 ## Current status
 
-_Last updated: 2026-11-05_
+_Last updated: 2026-11-06_
 
 **Branch:** `feature/subcommands` (pushed). v0.2.0 is the latest release.
 
@@ -72,10 +72,12 @@ Done on this branch:
 
 **Release decision:** no release yet. **v0.3.0 = config.toml + subcommands**, released together.
 
-**Now: argparse lessons first** (see "argparse lesson series" below). Fidel found he can read `cli.py` but can't
-write argparse from scratch (Claude wrote `cli.py` originally), so the subcommand work waits until he can.
+**Now: Fidel writes jarr's new `cli.py` himself.** The argparse lesson series is finished (see below), and its last
+exercise, `jarr-practice/practice/subcommands.py` (+ `test_subcommands.py`, all passing), already has jarr's exact
+command tree with print-only placeholder functions. Use it as the template: same tree, same shortcut, with the
+`cmd_...` functions calling the real logic that's in `main()` today.
 
-**After that: the subcommands** (design agreed earlier, details still to plan):
+**The subcommands** (design agreed; the parser shape is already proven in `subcommands.py`):
 - `jarr prep <video> [folder]` is the main command; `jarr <video> [folder]` stays as a shortcut for it.
 - `jarr config token`, `jarr config dir <folder>`, `jarr config show` (token masked), `jarr config path`.
 - `-t`/`-d` get removed. Planned layout: `cli.py` (dispatch), `commands/prep.py`, `commands/config.py`.
@@ -96,31 +98,30 @@ Optional improvements noted along the way:
 - Lesson format that works: verify every example by actually running it and show real output; ask for written
   predictions before running; exercises are written from an empty file in `jarr-practice/practice/`.
 
-### argparse lesson series (in progress)
+### argparse lesson series (finished 2026-11-06)
 
 | # | Topic | Exercise (in `jarr-practice/practice/`) | Status |
 |---|---|---|---|
 | 1 | describe vs parse (`parser` = blank form, `args` = filled form), positionals, `Namespace`, `type=`, free `--help`, exit code 2 | `argparse_1.py`: `repeat <word> <times>` | ✅ done |
 | 2 | `nargs="?"` + `default` (no default → `None`), options `-s/--sep`, `store_true` flags, dashes → underscores, usage notation, `parser.error()` | `argparse_2.py`: `word [times] [-s SEP] [-u]` | ✅ done |
 | 3 | `parse_args(argv=None)` + `parse_args(list)`, `if __name__ == "__main__":`, errors raise `SystemExit` (not an `Exception`), `assert`, plain vs relative imports | `test_argparse2.py` with an `exit_code(argv)` helper | ✅ done, tests pass |
-| 4 | functions as values: name vs call `()`, dispatch dict, passing functions (`type=int`), "`'str' object is not callable`" | `calc.py`, see below | ⏳ handed out, **not started** |
-| 5 | subcommands: `add_subparsers(dest=..., required=True)`, `add_parser`, nesting, `set_defaults(func=...)` + `args.func(args)`, the `jarr <video>` shortcut (insert `"prep"` into argv before parsing) | `subcommands.py`: jarr's CLI shape with print-only commands | not yet |
+| 4 | functions as values: name vs call `()`, dispatch dict, passing functions (`type=int`), "`'str' object is not callable`" | `predict_double.py` (all predictions right), `calc.py` with an `OPS` dispatch dict + `choices=list(OPS)` | ✅ done, incl. `div` bonus |
+| 5 | subcommands: `add_subparsers(dest=..., required=True)`, `add_parser`, nesting, `set_defaults` (a value each subcommand attaches to `args`; `func=` is just one such value), `args.func(args)`, `args` is flat, the `jarr <video>` shortcut | `subcommands.py` + `test_subcommands.py` | ✅ done, tests pass |
 
-After lesson 5, Fidel writes jarr's new `cli.py` himself.
+Decisions from exercise 5 that carry over to jarr's `cli.py`:
+- **Shortcut:** `add_default_command(argv, commands)` returns a new list (`["prep"] + argv`), never mutates. It
+  leaves the list alone if it's empty, if `argv[0]` is a known command, or if it starts with `-`. `parse_args` first
+  turns `argv=None` into `sys.argv[1:]`, builds the tree, then calls `add_default_command(argv, sub.choices)`.
+  Using `sub.choices` (Fidel's idea, not a hardcoded list) keeps the command list in one place. Claude had wrongly
+  claimed it couldn't work; it does, because the check only has to run before *parsing*, not before *building*.
+- Names used: `dest="command"` (top level), `dest="subcommand"` (under `config`), `config dir`'s argument is
+  `new_dir`. Each leaf has its own `cmd_...(args)` function; `config` itself has none.
+- Tests cover four groups: parsed values, `args.func is cmd_...`, `add_default_command` directly (incl. a dash in the
+  filename, empty list, caller's list unchanged), and exit codes via an `exit_code(argv)` helper.
 
-**Exercise 4 as handed out:**
-- Part A, predict then run, with `def double(n): return n * 2` and `ops = {"double": double}`:
-  `print(double)`, `print(double(4))`, `f = double; print(f(5))`, `print(ops["double"](3))`, `print(ops["double"])`,
-  `g = double(2); print(g(2))`.
-- Part B, `calc.py`: functions `add`/`sub`/`mul(a, b)` that return; `OPS = {"add": add, "sub": sub, "mul": mul}`;
-  `parse_args(argv=None)` with positionals `op` (new: `choices=list(OPS)`), `a` and `b` (`type=float`); under the
-  main guard, look up and call the function from `OPS`, with no `if`/`elif` on the op name. Expected:
-  `add 2 3` → `5.0`, `mul 4 2.5` → `10.0`, `div 1 2` → "invalid choice".
-- Bonus: add `div`, count how many lines it took; what happens with `div 1 0` and where to handle it.
-
-Lesson 4 context: Fidel's earlier `subcommands.py` attempt (deleted/abandoned) used `set_defaults(func=print(...))`
-and `prep.file`, i.e. calling instead of passing a function, and reading values from the parser instead of `args`.
-Both were explained in lessons 1 and 4.
-
-Notes from his exercises: `argparse_1.py` predicted `int("three")` → 3 (it fails); `argparse_2.py` uppercases
-after joining, so the separator is uppercased too (left as a discussion point).
+Common mistakes seen along the way, now understood: reading values from the parser instead of `args` (`prep.file`);
+calling instead of passing a function (`set_defaults(func=print(...))`); reading `args.command.file` (`args` is flat);
+adding `token`/`dir`/`show` as *arguments* of `config` instead of *subcommands*; `parse_args()` without `argv`;
+`.insert()` on the caller's list; `"-" in x` instead of `x.startswith("-")`; comparing `Path` with `str`; calling
+`parse_args(["--help"])` in a test without catching `SystemExit`. Also: `int("three")` fails, and in `calc.py` an
+error message should exit non-zero (`sys.exit("msg")` → stderr, exit 1).
