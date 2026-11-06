@@ -15,6 +15,10 @@
      `git commit --author="Claude <noreply@anthropic.com>" ...`. Fidel stays the committer.
   Never mix Fidel's and Claude's edits in one commit, so `git log --author=Claude` and `git blame` show exactly what
   Claude wrote. Don't push unless asked.
+  The email maps to the GitHub user `claude`, so these commits count under it in Insights → Contributors once they
+  reach `main`. **Merge PRs with "Create a merge commit" (or "Rebase and merge"), never "Squash and merge"**: squashing
+  turns the whole PR into one commit authored by Fidel and Claude's commits drop out of the count. `Co-Authored-By`
+  trailers don't count in that graph; only the author does.
 - Before a device switch or at the end of a session, update the **Current status** section below so the next session
   (possibly on another machine) can pick up where we left off. Commit and push it.
 
