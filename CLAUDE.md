@@ -109,6 +109,9 @@ Optional improvements noted along the way:
   (`os.open`) instead of `chmod` afterwards.
 - Ruff reports import-order (`I001`) in `commands/prep.py` and `media.py`; `ruff check --fix` sorts them.
 - `cmd_prep` is one long function; it could be split into steps (find token, choose destination, search, move).
+- **Possible flaky test:** one suite run on 2026-11-06 reported 52/53, then 42 runs in a row passed 53/53. Which
+  scenario failed wasn't captured (output was cut to the last line). If it happens again, keep the full output
+  (the `FAIL` block prints rc, output and config.toml) before rerunning.
 
 ### Learning notes
 
