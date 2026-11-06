@@ -32,6 +32,7 @@ builtins.input = fake_input
 getpass.getpass = fake_getpass
 
 import jarr  # noqa: E402  (imported after HOME is set, so CONFIG_DIR points at the temp dir)
+import jarr.commands.prep  # noqa: E402
 from jarr.tmdbmatch import TMDBMatch  # noqa: E402
 
 QUERIES = []
@@ -44,7 +45,8 @@ def fake_query(media, loose, token):
     return [TMDBMatch({"id": 1396, "name": "Breaking Bad", "first_air_date": "2008-01-20"})]
 
 
-jarr.TMDB_query = fake_query
+# Patch the name cmd_prep actually calls: commands/prep.py has its own reference to TMDB_query.
+jarr.commands.prep.TMDB_query = fake_query
 sys.argv = ["jarr", *cfg["argv"]]
 rc = jarr.main()
 print(f"__TOKEN_USED__={QUERIES[-1] if QUERIES else None}")
