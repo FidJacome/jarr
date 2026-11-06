@@ -31,7 +31,7 @@ moves it into Jellyfin's recommended folder layout (`movie/Title (Year) [tmdbid-
 - Python ≥ 3.13, managed with **uv** (`uv sync`, `uv run jarr <video>`)
 - Entry point: `jarr = "jarr:main"` → `src/jarr/__init__.py`
 - Dependencies: guessit, requests, tomli-w
-- Tests: `uv run tests/run_tests.py` (44 end-to-end scenarios; see Testing below)
+- Tests: `uv run tests/run_tests.py` (53 end-to-end scenarios; see Testing below)
 - Practice exercises and prototypes live in a separate **private** repo, `FidJacome/jarr-practice`, cloned next to
   this one (`practice/` lessons, `prototypes/` drafts of jarr functions). Keep them out of this public repo.
 - Workspace layout: `~/code/jarr-root/` (not a git repo) holds both clones, `jarr/` and `jarr-practice/`. Sessions
@@ -43,8 +43,11 @@ moves it into Jellyfin's recommended folder layout (`movie/Title (Year) [tmdbid-
 
 | File | Purpose |
 |---|---|
-| `__init__.py` | `main()`: arg handling, token/destination logic, the identify → search → move flow |
-| `cli.py` | argparse definition (`file`, `destination_path`, `-t`, `-d`) |
+| `__init__.py` | `main()`: logging setup, `args.func(args)`, and the catch-all for Ctrl+C (130) and unexpected errors (1) |
+| `cli.py` | `parse_args()`: the subcommand tree (`prep`, `config token/dir/show/path`) and `add_default_command(argv, sub.choices)` for the `jarr <video>` shortcut |
+| `commands/prep.py` | `cmd_prep(args)`: file checks, token lookup, destination choice, guessit → TMDB → move |
+| `commands/config.py` | `cmd_config_tkn/dir/show/path(args)`; `SECRET_WORDS` + `is_secret()` + `mask()` for `config show` |
+| `prompts.py` | `ask()` and `ask_token()`, shared by the commands |
 | `config.py` | `load_config()` / `save_config()` for `$XDG_CONFIG_HOME/jarr/config.toml` (chmod 600), `set_config(config, *keys, value)` for nested keys in memory |
 | `constants.py` | Video extensions, TMDB URL, `LOG_FILE`, `CONFIG_DIR` |
 | `media.py` | `Media.from_path()`: parses filename/folders into title, year, kind, season, episode |
@@ -81,25 +84,31 @@ Done on this branch:
 - Settings moved from `~/.config/jarr/.env` to `config.toml` (`c963398`). `python-dotenv` and `ENV_PATH` removed.
   **No migration from `.env`** (deliberate: sole user, settings trivial to re-enter); the README has an
   "Upgrading from 0.2.0" note instead.
-- Tests moved into the repo as `tests/` (`9537fdf`), 44/44 passing.
+- Tests moved into the repo as `tests/` (`9537fdf`).
+- **Subcommands done (2026-11-06).** Fidel wrote `cli.py`, `commands/prep.py`, `commands/config.py` and
+  `prompts.py`, and reduced `main()` to a dispatcher. `-t`/`-d` are gone:
+  - `jarr prep <video> [folder]`, with `jarr <video> [folder]` as a shortcut
+  - `jarr config token`, `config dir <folder>` (expands `~`, resolves, offers to create a missing folder; declining
+    exits 130), `config show` (secrets masked by name, e.g. `token: ****3456`), `config path`
+- Claude's commits on top: the logging fix in `main()`, the test harness patching
+  `jarr.commands.prep.TMDB_query` (patch where a name is *used*), `config show` masking + empty-config message,
+  the test rewrite (53/53 passing) and the README Commands table.
 
-**Release decision:** no release yet. **v0.3.0 = config.toml + subcommands**, released together.
+**Release decision:** **v0.3.0 = config.toml + subcommands**. The feature work is complete; what's left is the
+release itself.
 
-**Now: Fidel writes jarr's new `cli.py` himself.** The argparse lesson series is finished (see below), and its last
-exercise, `jarr-practice/practice/subcommands.py` (+ `test_subcommands.py`, all passing), already has jarr's exact
-command tree with print-only placeholder functions. Use it as the template: same tree, same shortcut, with the
-`cmd_...` functions calling the real logic that's in `main()` today.
-
-**The subcommands** (design agreed; the parser shape is already proven in `subcommands.py`):
-- `jarr prep <video> [folder]` is the main command; `jarr <video> [folder]` stays as a shortcut for it.
-- `jarr config token`, `jarr config dir <folder>`, `jarr config show` (token masked), `jarr config path`.
-- `-t`/`-d` get removed. Planned layout: `cli.py` (dispatch), `commands/prep.py`, `commands/config.py`.
-- Then update the tests and README, and release v0.3.0 with "Upgrading from 0.2.0" notes.
+**Next: release v0.3.0.**
+1. Bump `version` in `pyproject.toml` to `0.3.0` (+ `uv lock`).
+2. PR `feature/subcommands` → `main`, merged with **"Create a merge commit"** (not squash, see the transparency rule).
+3. Annotated tag `v0.3.0`, GitHub release marked **pre-release**, with hand-written user-facing notes, including
+   "Upgrading from 0.2.0": `-t`/`-d` replaced by `jarr config token|dir`, and settings must be re-entered (no `.env`
+   migration).
 
 Optional improvements noted along the way:
 - `save_config`: write to a temp file and `Path.replace()` it (atomic write), and create it as 0600 from the start
   (`os.open`) instead of `chmod` afterwards.
-- `jarr -t` succeeds silently; a short "Token saved." message would help.
+- Ruff reports import-order (`I001`) in `commands/prep.py` and `media.py`; `ruff check --fix` sorts them.
+- `cmd_prep` is one long function; it could be split into steps (find token, choose destination, search, move).
 
 ### Learning notes
 
