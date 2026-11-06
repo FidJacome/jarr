@@ -2,23 +2,13 @@ import argparse
 import sys
 from pathlib import Path
 
+from .commands.config import (
+    cmd_config_dir,
+    cmd_config_path,
+    cmd_config_tkn,
+    cmd_config_show,
+)
 from .commands.prep import cmd_prep
-
-
-def cmd_config_tkn(args):
-    print("config token: would ask for token")
-
-
-def cmd_config_dir(args):
-    print(f"config dir: would save {args.path}")
-
-
-def cmd_config_show(args):
-    print("would show the configurations set in config.toml")
-
-
-def cmd_config_path(args):
-    print("would show the path where config.toml is")
 
 
 def add_default_command(argv, commands):
@@ -35,7 +25,9 @@ def parse_args(argv=None):
     if argv is None:
         argv = sys.argv[1:]  # a real run: everything after the script name
 
-    parser = argparse.ArgumentParser(prog="jarr", description="The CLI companion tool.")
+    parser = argparse.ArgumentParser(
+        prog="jarr", description="The CLI Jellyfin companion tool."
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     prep = sub.add_parser("prep", help="Rename file into recommended format.")
@@ -48,7 +40,7 @@ def parse_args(argv=None):
     )
     prep.set_defaults(func=cmd_prep)
 
-    config = sub.add_parser("config", help="Change you configuration file.")
+    config = sub.add_parser("config", help="Change the configuration file.")
     config_sub = config.add_subparsers(dest="subcommand", required=True)
 
     config_tkn = config_sub.add_parser("token", help="Change or set your TMDB token.")
@@ -70,9 +62,3 @@ def parse_args(argv=None):
 
     args = parser.parse_args(argv)
     return args
-
-
-if __name__ == "__main__":
-    args = parse_args()
-    print(args)
-    args.func(args)
