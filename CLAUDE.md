@@ -78,9 +78,10 @@ temp homes. Run the suite after every change to `main()`; add a scenario for eac
 
 _Last updated: 2026-11-06_
 
-**Branch:** `feature/subcommands` (pushed). v0.2.0 is the latest release.
+**v0.3.0 released (2026-11-06)**: PR #2 (`feature/subcommands` → `main`, merge commit), tag `v0.3.0`, GitHub
+pre-release with user-facing notes. `main` is the current state; there's no open feature branch.
 
-Done on this branch:
+What went into v0.3.0:
 - Settings moved from `~/.config/jarr/.env` to `config.toml` (`c963398`). `python-dotenv` and `ENV_PATH` removed.
   **No migration from `.env`** (deliberate: sole user, settings trivial to re-enter); the README has an
   "Upgrading from 0.2.0" note instead.
@@ -94,15 +95,13 @@ Done on this branch:
   `jarr.commands.prep.TMDB_query` (patch where a name is *used*), `config show` masking + empty-config message,
   the test rewrite (53/53 passing) and the README Commands table.
 
-**Release decision:** **v0.3.0 = config.toml + subcommands**. The feature work is complete; what's left is the
-release itself.
+**Release steps used (repeat for the next release):** bump `version` in `pyproject.toml` + `uv lock`; PR the feature
+branch into `main` and merge with **"Create a merge commit"** (never squash, see the transparency rule); annotated
+tag on the merge commit; GitHub release marked **pre-release** with hand-written user-facing notes (New / Improved /
+Upgrading from the previous version).
 
-**Next: release v0.3.0.**
-1. Bump `version` in `pyproject.toml` to `0.3.0` (+ `uv lock`).
-2. PR `feature/subcommands` → `main`, merged with **"Create a merge commit"** (not squash, see the transparency rule).
-3. Annotated tag `v0.3.0`, GitHub release marked **pre-release**, with hand-written user-facing notes, including
-   "Upgrading from 0.2.0": `-t`/`-d` replaced by `jarr config token|dir`, and settings must be re-entered (no `.env`
-   migration).
+**Next:** not decided yet. Candidates: Phase 2 (send files to the Jellyfin server), or the optional improvements
+below. Start new work on a new feature branch from `main`.
 
 Optional improvements noted along the way:
 - `save_config`: write to a temp file and `Path.replace()` it (atomic write), and create it as 0600 from the start
