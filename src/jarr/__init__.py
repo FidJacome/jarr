@@ -3,7 +3,6 @@ import logging
 from jarr.constants import LOG_FILE
 
 from .cli import parse_args
-from .config import load_config, save_config, set_config
 from .style import red
 
 logger = logging.getLogger(__name__)
