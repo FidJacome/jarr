@@ -1,4 +1,4 @@
-"""Scenario tests for jarr's token and destination features.
+"""Scenario tests for jarr: prep, the config commands, and config.toml handling.
 
 Each scenario runs jarr.main() in a subprocess with a throwaway HOME, fake TMDB results and
 scripted input()/getpass(). Checks look at outcomes (exit code, config.toml contents, where the video
@@ -116,10 +116,10 @@ check("T2 saved token -> no prompt, saved token used",
       ok_run(rc, out) and "<secret:" not in out and "__TOKEN_USED__=tok123" in out, rc, out, h)
 
 h = setup()
-rc, out = run(h, ["-t", str(h / "dl" / MOVIE)], secrets=["changed"])
-check("T3 -t replaces the saved token",
-      ok_run(rc, out) and saved_token(h) == "changed"
-      and "__TOKEN_USED__=changed" in out, rc, out, h)
+run(h, ["config", "token"], secrets=["changed"])
+rc, out = run(h, [str(h / "dl" / MOVIE)])
+check("T3 a token set with 'config token' is used by the next run",
+      ok_run(rc, out) and "<secret:" not in out and "__TOKEN_USED__=changed" in out, rc, out, h)
 
 h = setup(token=False)
 rc, out = run(h, [str(h / "dl" / MOVIE)], secrets=["   "])
@@ -166,143 +166,195 @@ rc, out = run(h, [str(h / "dl" / MOVIE), "~/lib"])
 check("D5 quoted '~/lib' expands to home (no literal '~' folder)",
       ok_run(rc, out) and (h / "lib" / MOVIE_REL).exists() and not (h / "~").exists(), rc, out, h)
 
-# ---------- -d with a video file ----------
-section("-d with a video")
+# ---------- prep ----------
+section("prep")
 
 h = setup()
-rc, out = run(h, ["-d", str(h / "dl" / MOVIE), str(h / "lib")])
-check("S1 -d + path -> file moved there, path saved, token kept",
-      ok_run(rc, out) and (h / "lib" / MOVIE_REL).exists() and saved_default(h) == f"{h}/lib"
-      and saved_token(h) == "tok123", rc, out, h)
+rc, out = run(h, ["prep", str(h / "dl" / MOVIE), str(h / "lib")])
+check("P1 'jarr prep <video> <folder>' works like the shortcut",
+      ok_run(rc, out) and (h / "lib" / MOVIE_REL).exists() and saved_default(h) is None, rc, out, h)
 
 h = setup()
-rc, out = run(h, ["-d", str(h / "dl" / MOVIE), str(h / "lib")])
+run(h, ["config", "dir", str(h / "lib")], inputs=["y"])
 rc, out = run(h, [str(h / "dl" / EPISODE)])
-check("S2 saved default is used on the next run",
+check("P2 a default set with 'config dir' is used on the next run",
       ok_run(rc, out) and (h / "lib" / TV_REL).exists(), rc, out, h)
 
 h = setup()
 (h / "work").mkdir()
-rc, out = run(h, ["-d", str(h / "dl" / MOVIE), "rel/lib"], cwd=h / "work")
-check("S3 relative path -> resolved against cwd, saved absolute",
-      ok_run(rc, out) and (h / "work/rel/lib" / MOVIE_REL).exists()
-      and saved_default(h) == f"{h}/work/rel/lib", rc, out, h)
+rc, out = run(h, [str(h / "dl" / MOVIE), "rel/lib"], cwd=h / "work")
+check("P3 relative destination -> resolved against the current folder",
+      ok_run(rc, out) and (h / "work/rel/lib" / MOVIE_REL).exists(), rc, out, h)
 
 h = setup()
-rc, out = run(h, ["-d", str(h / "dl" / MOVIE), "~/lib"])
-check("S4 quoted '~/lib' -> saved default matches where the file went",
-      ok_run(rc, out) and (h / "lib" / MOVIE_REL).exists() and saved_default(h) == f"{h}/lib", rc, out, h)
-
-h = setup(token=False)
-rc, out = run(h, ["-d", str(h / "dl" / MOVIE), str(h / "lib")], env_extra={"TMDB_TOKEN": "fromenv"})
-check("S5 -d works when ~/.config/jarr doesn't exist yet",
-      ok_run(rc, out) and (h / "lib" / MOVIE_REL).exists() and saved_default(h) == f"{h}/lib", rc, out, h)
+rc, out = run(h, [str(h / "dl" / MOVIE)], inputs=["n"])
+check("P4 answering 'n' to the search -> cancelled, video not moved",
+      rc == 130 and "Traceback" not in out and (h / "dl" / MOVIE).exists(), rc, out, h)
 
 h = setup()
-rc, out = run(h, ["-t", "-d", str(h / "dl" / MOVIE), str(h / "lib")], secrets=["changed"])
-check("S6 -t and -d together -> both saved",
-      ok_run(rc, out) and saved_token(h) == "changed" and saved_default(h) == f"{h}/lib", rc, out, h)
-
-h = setup()
-rc, out = run(h, ["-d", str(h / "dl" / MOVIE), str(h / "lib")], inputs=["n"])
-check("S7 -d then cancel -> default still saved (intended, by design)",
-      rc == 130 and "Traceback" not in out and saved_default(h) == f"{h}/lib"
-      and (h / "dl" / MOVIE).exists(), rc, out, h)
-
-h = setup()
-rc, out = run(h, ["-d", str(h / "dl" / MOVIE)])
-check("S8 -d with no path -> clean error, nothing saved",
+rc, out = run(h, [str(h / "dl" / "missing.mkv")])
+check("P5 missing video -> clean error, nothing saved",
       clean_fail(rc, out, h) and saved_default(h) is None, rc, out, h)
 
 h = setup()
-rc, out = run(h, ["-d", str(h / "dl" / "missing.mkv"), str(h / "lib")])
-check("S9 -d with a missing video -> clean error, nothing saved",
-      clean_fail(rc, out, h) and saved_default(h) is None, rc, out, h)
+rc, out = run(h, [str(h / "dl")])
+check("P6 a folder instead of a video -> clean error",
+      clean_fail(rc, out, h), rc, out, h)
 
 h = setup()
-(h / "afile").write_text("x")
-rc, out = run(h, ["-d", str(h / "dl" / MOVIE), str(h / "afile")])
-check("S10 -d with a file as destination -> clean error, nothing saved",
-      clean_fail(rc, out, h) and saved_default(h) is None, rc, out, h)
+rc, out = run(h, ["prep"])
+check("P7 'jarr prep' with no video -> usage error",
+      rc == 2 and "usage:" in out and "Traceback" not in out, rc, out, h)
 
-# ---------- -d alone (set default without a video) ----------
-section("-d alone")
+# ---------- config dir ----------
+section("config dir")
 
 h = setup()
 (h / "lib").mkdir()
-rc, out = run(h, ["-d", str(h / "lib")])
-check("A1 'jarr -d /existing/dir' -> saved, no TMDB search",
+rc, out = run(h, ["config", "dir", str(h / "lib")])
+check("CD1 existing folder -> saved, no TMDB search",
       ok_run(rc, out) and saved_default(h) == f"{h}/lib" and "__TOKEN_USED__=None" in out
       and "Search TMDB" not in out, rc, out, h)
 
 h = setup()
 (h / "work").mkdir(); (h / "work/lib").mkdir()
-rc, out = run(h, ["-d", "lib"], cwd=h / "work")
-check("A2 'jarr -d lib' (relative) -> saved as absolute path",
+rc, out = run(h, ["config", "dir", "lib"], cwd=h / "work")
+check("CD2 relative folder -> saved as an absolute path",
       ok_run(rc, out) and saved_default(h) == f"{h}/work/lib", rc, out, h)
 
 h = setup()
 (h / "lib").mkdir()
-rc, out = run(h, ["-d", "~/lib"])
-check("A3 'jarr -d \"~/lib\"' -> saved with ~ expanded",
-      ok_run(rc, out) and saved_default(h) == f"{h}/lib", rc, out, h)
+rc, out = run(h, ["config", "dir", "~/lib"])
+check("CD3 quoted '~/lib' -> saved with ~ expanded (no literal '~' folder)",
+      ok_run(rc, out) and saved_default(h) == f"{h}/lib" and not (h / "~").exists(), rc, out, h)
 
 h = setup()
+rc, out = run(h, ["config", "dir", str(h / "newlib")], inputs=["y"])
+check("CD4 missing folder + 'y' -> created and saved",
+      ok_run(rc, out) and (h / "newlib").is_dir() and saved_default(h) == f"{h}/newlib", rc, out, h)
+
+h = setup()
+rc, out = run(h, ["config", "dir", str(h / "newlib")], inputs=["n"])
+check("CD5 missing folder + 'n' -> cancelled, nothing created or saved",
+      rc == 130 and "Traceback" not in out and not (h / "newlib").exists()
+      and saved_default(h) is None, rc, out, h)
+
+h = setup()
+(h / "afile").write_text("x")
+rc, out = run(h, ["config", "dir", str(h / "afile")])
+check("CD6 a file -> clean error, nothing saved",
+      rc == 1 and "Error:" in out and "Traceback" not in out and saved_default(h) is None, rc, out, h)
+
+h = setup()
+(h / "afile").write_text("x")
+rc, out = run(h, ["config", "dir", str(h / "afile" / "sub")], inputs=["y"])
+check("CD7 folder can't be created (under a file) -> clean error, nothing saved",
+      rc == 1 and "Error:" in out and "Traceback" not in out and saved_default(h) is None, rc, out, h)
+
+h = setup(token=False)
 (h / "lib").mkdir()
-rc, out = run(h, ["-t", "-d", str(h / "lib")], secrets=["changed"])
-check("A4 'jarr -t -d /dir' -> default saved, no crash",
+rc, out = run(h, ["config", "dir", str(h / "lib")])
+check("CD8 works when ~/.config/jarr doesn't exist yet",
       ok_run(rc, out) and saved_default(h) == f"{h}/lib", rc, out, h)
 
-h = setup()
-rc, out = run(h, ["-d", str(h / "newlib")])
-check("A5 'jarr -d /dir/that/doesnt/exist' -> saved, or a clean error (design choice)",
-      (ok_run(rc, out) and saved_default(h) == f"{h}/newlib")
-      or (rc == 1 and "Error:" in out and "Traceback" not in out and saved_default(h) is None),
-      rc, out, h)
-
-# ---------- settings-only commands ----------
-section("settings only")
+h = setup(token=False)
+(h / "lib").mkdir()
+(h / ".config").write_text("i am a file")  # ~/.config unusable -> can't save anything
+rc, out = run(h, ["config", "dir", str(h / "lib")])
+check("CD9 saving fails -> exit 1, not a false success",
+      rc == 1 and "Error:" in out and "Traceback" not in out, rc, out, h)
 
 h = setup()
-rc, out = run(h, ["-t"], secrets=["changed"])
-check("K1 'jarr -t' -> token replaced, no TMDB search",
+rc, out = run(h, ["config", "dir"])
+check("CD10 'jarr config dir' with no folder -> usage error, nothing saved",
+      rc == 2 and "usage:" in out and "Traceback" not in out and saved_default(h) is None, rc, out, h)
+
+# ---------- config token ----------
+section("config token")
+
+h = setup()
+rc, out = run(h, ["config", "token"], secrets=["  changed  "])
+check("CT1 replaces the token (spaces stripped), no TMDB search",
       ok_run(rc, out) and saved_token(h) == "changed" and "__TOKEN_USED__=None" in out
       and "Search TMDB" not in out, rc, out, h)
 
-h = setup(token=False)
-rc, out = run(h, ["-t"], secrets=["   "])
-check("K2 'jarr -t' with a blank token -> clean error, nothing saved",
-      rc == 1 and "Error:" in out and "Traceback" not in out and saved_token(h) is None, rc, out, h)
+h = setup()
+rc, out = run(h, ["config", "token"], secrets=["   "])
+check("CT2 blank token -> clean error, saved token unchanged",
+      rc == 1 and "Error:" in out and "Traceback" not in out and saved_token(h) == "tok123", rc, out, h)
 
 h = setup()
-(h / "lib").mkdir()
-rc, out = run(h, ["-t", "-d", str(h / "lib")], secrets=["changed"])
-check("K3 'jarr -t -d /dir' -> token AND default saved, no TMDB search",
-      ok_run(rc, out) and saved_token(h) == "changed" and saved_default(h) == f"{h}/lib"
-      and "__TOKEN_USED__=None" in out, rc, out, h)
+rc, out = run(h, ["config", "token"])  # no answer at all: like Ctrl+D
+check("CT3 prompt cancelled -> exit 130, saved token unchanged",
+      rc == 130 and "Traceback" not in out and saved_token(h) == "tok123", rc, out, h)
 
 h = setup(token=False)
-(h / ".config").write_text("i am a file")  # ~/.config unusable -> can't save anything
-rc, out = run(h, ["-t"], secrets=["tok"])
-check("K6 'jarr -t' when the token can't be saved -> exit 1, not a false success",
-      rc == 1 and "Error:" in out and "Traceback" not in out, rc, out, h)
-
-h = setup(token=False)
-(h / "lib").mkdir()
 (h / ".config").write_text("i am a file")
-rc, out = run(h, ["-t", "-d", str(h / "lib")], secrets=["tok"])
-check("K7 'jarr -t -d /dir' when saving fails -> exit 1",
+rc, out = run(h, ["config", "token"], secrets=["tok"])
+check("CT4 saving fails -> exit 1, not a false success",
       rc == 1 and "Error:" in out and "Traceback" not in out, rc, out, h)
+
+# ---------- config show / path ----------
+section("config show / path")
+
+h = setup(token=False)
+(h / ".config/jarr").mkdir(parents=True)
+(h / CONFIG).write_text('default_dir = "/mnt/media"\n[tmdb]\ntoken = "abcdef123456"\n')
+rc, out = run(h, ["config", "show"])
+check("CS1 shows the settings with the token masked",
+      ok_run(rc, out) and "/mnt/media" in out and "3456" in out and "abcdef123456" not in out, rc, out, h)
+
+h = setup(token=False)
+rc, out = run(h, ["config", "show"])
+check("CS2 nothing saved -> exit 0, no crash",
+      ok_run(rc, out) and "Error:" not in out, rc, out, h)
+
+h = setup(token=False)
+(h / ".config/jarr").mkdir(parents=True)
+(h / CONFIG).write_text("this is = = not toml\n")
+rc, out = run(h, ["config", "show"])
+check("CS3 broken config.toml -> error shown, no crash",
+      ok_run(rc, out) and "Error:" in out, rc, out, h)
+
+h = setup()
+rc, out = run(h, ["config", "path"])
+check("CS4 'config path' prints the config file's path",
+      ok_run(rc, out) and str(h / CONFIG) in out, rc, out, h)
+
+# ---------- usage ----------
+section("usage")
 
 h = setup()
 rc, out = run(h, [])
-check("K4 'jarr' with no arguments -> usage error, no crash",
+check("K1 'jarr' with no arguments -> usage error, no crash",
       rc == 2 and "usage:" in out and "Traceback" not in out, rc, out, h)
 
 h = setup()
-rc, out = run(h, ["-d"])
-check("K5 'jarr -d' with nothing else -> usage error, nothing saved",
-      rc == 2 and "usage:" in out and "Traceback" not in out and saved_default(h) is None, rc, out, h)
+rc, out = run(h, ["config"])
+check("K2 'jarr config' with no action -> usage error",
+      rc == 2 and "usage:" in out and "Traceback" not in out, rc, out, h)
+
+h = setup()
+rc, out = run(h, ["config", "token", "dir"])
+check("K3 config actions can't be chained -> usage error, nothing saved",
+      rc == 2 and "Traceback" not in out and saved_token(h) == "tok123", rc, out, h)
+
+h = setup()
+(h / "lib").mkdir()
+rc, out = run(h, ["-d", str(h / "lib")])
+check("K4 removed flags (-d) -> usage error, nothing saved",
+      rc == 2 and "Traceback" not in out and saved_default(h) is None, rc, out, h)
+
+h = setup()
+rc, out = run(h, ["-t"])
+check("K5 removed flags (-t) -> usage error, no prompt",
+      rc == 2 and "Traceback" not in out and "<secret:" not in out, rc, out, h)
+
+h = setup()
+rc, out = run(h, ["--help"])
+check("K6 '--help' -> help, not treated as a video",
+      rc == 0 and "usage:" in out and "Search TMDB" not in out, rc, out, h)
+
 
 # ---------- unusable destinations ----------
 section("unusable destinations")
@@ -340,19 +392,19 @@ check("C2 a token from TMDB_TOKEN is never written to disk",
       ok_run(rc, out) and saved_token(h) is None, rc, out, h)
 
 h = setup(token=False)
-rc, out = run(h, ["-t"], secrets=["tok"])
+rc, out = run(h, ["config", "token"], secrets=["tok"])
 mode = (h / CONFIG).stat().st_mode & 0o777 if (h / CONFIG).is_file() else None
 check("C3 config.toml is created owner-only (600)",
       ok_run(rc, out) and mode == 0o600, rc, out, h)
 
-h = setup(default=None)
-rc, out = run(h, ["-t", "-d", str(h / "lib")], secrets=["   "])
-check("C4 'jarr -t -d /dir' with a blank token -> clean error, nothing changed",
-      rc == 1 and "Error:" in out and "Traceback" not in out
-      and saved_token(h) == "tok123" and saved_default(h) is None, rc, out, h)
+h = setup(default="/mnt/media")
+rc, out = run(h, ["config", "token"], secrets=["changed"])
+check("C4 saving the token keeps the default folder (whole file rewritten safely)",
+      ok_run(rc, out) and saved_token(h) == "changed" and saved_default(h) == "/mnt/media", rc, out, h)
 
 h = setup()
-rc, out = run(h, ["-d", str(h / "dl" / MOVIE), str(h / "lib")])
+(h / "lib").mkdir()
+rc, out = run(h, ["config", "dir", str(h / "lib")])
 check("C5 saving the default keeps the token (whole file rewritten safely)",
       ok_run(rc, out) and saved_token(h) == "tok123" and saved_default(h) == f"{h}/lib", rc, out, h)
 
