@@ -6,6 +6,15 @@
 - **Do not write or edit code unless explicitly asked to.** Explain, point to the file/line, suggest an approach or show
   a short illustrative snippet in chat, and let Fidel implement it.
 - Editing docs such as this file or notes is fine when asked.
+- **AI transparency rule (since 2026-11-06), for every change Claude makes in either repo (`jarr`, `jarr-practice`),
+  code, tests or docs alike:**
+  1. Before touching anything, commit Fidel's uncommitted work as-is (his normal git identity, a descriptive message;
+     prefix `WIP:` if it's mid-task). Skip this if the tree is clean.
+  2. Make the change.
+  3. Commit only Claude's change with Claude as the author:
+     `git commit --author="Claude <noreply@anthropic.com>" ...`. Fidel stays the committer.
+  Never mix Fidel's and Claude's edits in one commit, so `git log --author=Claude` and `git blame` show exactly what
+  Claude wrote. Don't push unless asked.
 - Before a device switch or at the end of a session, update the **Current status** section below so the next session
   (possibly on another machine) can pick up where we left off. Commit and push it.
 
