@@ -192,6 +192,18 @@ check("P4 answering 'n' to the search -> cancelled, video not moved",
       rc == 130 and "Traceback" not in out and (h / "dl" / MOVIE).exists(), rc, out, h)
 
 h = setup()
+rc, out = run(h, [str(h / "dl" / MOVIE)], inputs=["y", "0"])
+check("P8 '0' at Choose -> cancelled, video not moved to any match",
+      rc == 130 and "Traceback" not in out and (h / "dl" / MOVIE).exists()
+      and not (h / "staging" / "movie").exists(), rc, out, h)
+
+h = setup()
+rc, out = run(h, [str(h / "dl" / MOVIE)], inputs=["y", "L", "1"])
+check("P9 'L' at Choose -> second search ignores the year, then the pick is moved",
+      ok_run(rc, out) and "__LOOSE__=[False, True]" in out
+      and (h / "staging" / MOVIE_REL).exists(), rc, out, h)
+
+h = setup()
 rc, out = run(h, [str(h / "dl" / "missing.mkv")])
 check("P5 missing video -> clean error, nothing saved",
       clean_fail(rc, out, h) and saved_default(h) is None, rc, out, h)

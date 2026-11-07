@@ -35,11 +35,13 @@ import jarr  # noqa: E402  (imported after HOME is set, so CONFIG_DIR points at 
 import jarr.commands.prep  # noqa: E402
 from jarr.tmdbmatch import TMDBMatch  # noqa: E402
 
-QUERIES = []
+QUERIES = []  # tokens used, one per TMDB search
+LOOSE = []  # loose flag of each search, in order
 
 
 def fake_query(media, loose, token):
     QUERIES.append(token)
+    LOOSE.append(loose)
     if media.kind == "movie":
         return [TMDBMatch({"id": 603, "title": "The Matrix", "release_date": "1999-03-31"})]
     return [TMDBMatch({"id": 1396, "name": "Breaking Bad", "first_air_date": "2008-01-20"})]
@@ -50,4 +52,5 @@ jarr.commands.prep.TMDB_query = fake_query
 sys.argv = ["jarr", *cfg["argv"]]
 rc = jarr.main()
 print(f"__TOKEN_USED__={QUERIES[-1] if QUERIES else None}")
+print(f"__LOOSE__={LOOSE}")
 sys.exit(rc)
