@@ -112,7 +112,7 @@ def cmd_prep(args) -> int:
             if option == "l":
                 print(dim("Searching TMDB, ignoring the year..."))
                 tmdb_results = TMDB_query(media, True, token)
-                option = TMDB_select(tmdb_results)
+                option = TMDB_select(tmdb_results, False)
             if option == 0:
                 raise KeyboardInterrupt
         except TMDBError as e:
