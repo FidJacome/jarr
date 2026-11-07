@@ -93,11 +93,14 @@ def cmd_prep(args) -> int:
         )
         print(dim(file_path.name))
         print(f"{bold(media.title)}{year}  {dim(kind)}")
-        answer = ask(
-            f"Search TMDB? {dim('[Y]es / [l]oose (ignore year) / [n]o')} ",
-            ["y", "l", "n"],
-            "y",
-        )
+        if year != "":
+            answer = ask(
+                f"Search TMDB? {dim('[Y]es / [l]oose (ignore year) / [n]o')} ",
+                ["y", "l", "n"],
+                "y",
+            )
+        else:
+            answer = ask(f"Search TMDB? {dim('[Y]es / [n]o')} ", ["y", "n"], "y")
         if answer == "n":
             raise KeyboardInterrupt
 
@@ -105,11 +108,11 @@ def cmd_prep(args) -> int:
             print(dim("Searching TMDB..."))
             tmdb_results = TMDB_query(media, answer == "l", token)
             option = TMDB_select(tmdb_results)
-            while option == 0:
+            while option == "l":
                 print(dim("Searching TMDB, ignoring the year..."))
                 tmdb_results = TMDB_query(media, True, token)
                 option = TMDB_select(tmdb_results)
-            if option == -1:
+            if option == 0:
                 raise KeyboardInterrupt
         except TMDBError as e:
             logger.error(e)
