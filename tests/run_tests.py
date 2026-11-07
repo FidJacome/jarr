@@ -25,6 +25,8 @@ EPISODE = "Breaking.Bad.S01E02.720p.mkv"
 MOVIE_REL = "movie/The Matrix (1999) [tmdbid-603]/The Matrix (1999).mkv"
 TV_REL = "tv/Breaking Bad (2008) [tmdbid-1396]/Season 01/Breaking Bad S01E02.mkv"
 results, homes = [], []
+(HERE / "homes").mkdir(exist_ok=True)
+RUN_DIR = Path(tempfile.mkdtemp(prefix="run-", dir=HERE / "homes"))  # one per suite run
 
 
 # ---------- helpers ----------
@@ -40,8 +42,12 @@ def run(home, argv, inputs=("y", "1"), secrets=(), cwd=None, env_extra=None):
 
 
 def setup(token=True, default=None):
-    (HERE / "homes").mkdir(exist_ok=True)
-    home = Path(tempfile.mkdtemp(prefix="jarrtest-", dir=HERE / "homes"))
+    # jarr passes the last 3 path parts to guessit (home/dl/video), so the home folder's name is
+    # part of what gets parsed. Random names like "jarrtest-e65_pnop" sometimes read as an episode
+    # (e65), which made the suite flaky. Fixed names (home001, ...) parse cleanly; the random part
+    # lives one level up, in RUN_DIR, where guessit never sees it.
+    home = RUN_DIR / f"home{len(homes) + 1:03d}"
+    home.mkdir()
     homes.append(home)
     (home / "dl").mkdir()
     for n in (MOVIE, EPISODE):
@@ -463,6 +469,7 @@ check("C8 an old .env is ignored (no migration, by design)",
 passed = sum(ok for _, ok in results)
 print(f"\n{passed}/{len(results)} passed")
 if not os.getenv("KEEP"):
-    for d in homes:
-        shutil.rmtree(d, ignore_errors=True)
+    shutil.rmtree(RUN_DIR, ignore_errors=True)
+else:
+    print(f"Kept: {RUN_DIR}")
 sys.exit(0 if passed == len(results) else 1)
