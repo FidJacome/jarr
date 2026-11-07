@@ -62,7 +62,7 @@ def TMDB_query(media: "Media", loose_query: bool, token) -> list["TMDBMatch"]:
     return query_results
 
 
-def TMDB_select(results: list["TMDBMatch"]) -> int | str:
+def TMDB_select(results: list["TMDBMatch"], allow_loose: bool) -> int | str:
     print()
     for i, match in enumerate(results, start=1):
         print(f"  {cyan(i)}  {bold(match.title)} {dim(f'({match.year})')}")
@@ -73,7 +73,10 @@ def TMDB_select(results: list["TMDBMatch"]) -> int | str:
                 else match.overview[:87].rstrip() + "..."
             )
             print(f"     {dim(overview)}")
-    print(f"\n  {cyan('l')}  Loose search (ignore year)    {cyan(0)}  Cancel")
+    if allow_loose:
+        print(f"\n  {cyan('l')}  Loose search (ignore year)    {cyan(0)}  Cancel")
+    else:
+        print(f"\n  {cyan(0)}  Cancel")
 
     while True:
         option = input(f"{bold('Choose:')} ").strip()
@@ -83,11 +86,18 @@ def TMDB_select(results: list["TMDBMatch"]) -> int | str:
             pass
         if isinstance(option, str):
             option = option.lower()
-        if (isinstance(option, int) and 0 <= option <= len(results)) or option == "l":
-            break
-        print(
-            yellow(
-                f"Enter a number between 0 and {len(results)} or the letter l to perform a loose search."
+        if allow_loose:
+            if (
+                isinstance(option, int) and 0 <= option <= len(results)
+            ) or option == "l":
+                break
+            print(
+                yellow(
+                    f"Enter a number between 0 and {len(results)} or the letter l to perform a loose search."
+                )
             )
-        )
+        else:
+            if isinstance(option, int) and 0 <= option <= len(results):
+                break
+            print(yellow(f"Enter a number between 0 and {len(results)}."))
     return option
