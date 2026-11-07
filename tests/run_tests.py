@@ -204,6 +204,24 @@ check("P9 'L' at Choose -> second search ignores the year, then the pick is move
       and (h / "staging" / MOVIE_REL).exists(), rc, out, h)
 
 h = setup()
+rc, out = run(h, [str(h / "dl" / MOVIE)], inputs=["y", "L", "L", "1"])
+check("P10 only one loose search: a second 'L' is rejected, then the pick is moved",
+      ok_run(rc, out) and "__LOOSE__=[False, True]" in out
+      and (h / "staging" / MOVIE_REL).exists(), rc, out, h)
+
+h = setup()
+rc, out = run(h, [str(h / "dl" / MOVIE)], inputs=["l", "l", "1"])
+check("P11 loose at 'Search TMDB?' -> 'l' rejected at Choose, no second search",
+      ok_run(rc, out) and "__LOOSE__=[True]" in out
+      and (h / "staging" / MOVIE_REL).exists(), rc, out, h)
+
+h = setup()
+rc, out = run(h, [str(h / "dl" / EPISODE)], inputs=["y", "l", "1"])
+check("P12 no year in the filename -> 'l' rejected at Choose, no second search",
+      ok_run(rc, out) and "__LOOSE__=[False]" in out
+      and (h / "staging" / TV_REL).exists(), rc, out, h)
+
+h = setup()
 rc, out = run(h, [str(h / "dl" / "missing.mkv")])
 check("P5 missing video -> clean error, nothing saved",
       clean_fail(rc, out, h) and saved_default(h) is None, rc, out, h)
