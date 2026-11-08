@@ -391,6 +391,11 @@ rc, out = run(h, ["--help"])
 check("K6 '--help' -> help, not treated as a video",
       rc == 0 and "usage:" in out and "Search TMDB" not in out, rc, out, h)
 
+h = setup()
+rc, out = run(h, ["-h"])
+check("K7 '-h' -> top-level help (lists the commands), not prep's",
+      rc == 0 and "{prep,config}" in out and "Search TMDB" not in out, rc, out, h)
+
 
 # ---------- unusable destinations ----------
 section("unusable destinations")
