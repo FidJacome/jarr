@@ -228,6 +228,35 @@ check("P12 no year in the filename -> 'l' rejected at Choose, no second search",
       and (h / "staging" / TV_REL).exists(), rc, out, h)
 
 h = setup()
+rc, out = run(h, [str(h / "dl" / MOVIE)])
+check("P13 no -c -> moved: in the library, original gone",
+      ok_run(rc, out) and (h / "staging" / MOVIE_REL).exists()
+      and not (h / "dl" / MOVIE).exists(), rc, out, h)
+
+
+def copied(h, rel=MOVIE_REL):
+    """The video is in the library with the same contents, and the original is still in dl/."""
+    dest, orig = h / "staging" / rel, h / "dl" / MOVIE
+    return dest.is_file() and orig.is_file() and dest.read_bytes() == orig.read_bytes()
+
+
+h = setup()
+rc, out = run(h, ["-c", str(h / "dl" / MOVIE)])
+check("P14 'jarr -c <video>' -> copied, original kept (option before the video)",
+      ok_run(rc, out) and copied(h), rc, out, h)
+
+h = setup()
+rc, out = run(h, [str(h / "dl" / MOVIE), "-c"])
+check("P15 'jarr <video> -c' -> copied, original kept (option after the video)",
+      ok_run(rc, out) and copied(h), rc, out, h)
+
+h = setup()
+rc, out = run(h, ["prep", "--copy", str(h / "dl" / MOVIE), str(h / "lib")])
+check("P16 'jarr prep --copy <video> <folder>' -> copied into the folder, original kept",
+      ok_run(rc, out) and (h / "lib" / MOVIE_REL).is_file() and (h / "dl" / MOVIE).is_file()
+      and not (h / "staging").exists(), rc, out, h)
+
+h = setup()
 rc, out = run(h, [str(h / "dl" / "missing.mkv")])
 check("P5 missing video -> clean error, nothing saved",
       clean_fail(rc, out, h) and saved_default(h) is None, rc, out, h)
