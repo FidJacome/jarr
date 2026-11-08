@@ -5,10 +5,12 @@ from pathlib import Path
 from .commands.config import (
     cmd_config_dir,
     cmd_config_path,
-    cmd_config_tkn,
     cmd_config_show,
+    cmd_config_tkn,
 )
 from .commands.prep import cmd_prep
+
+TOP_OPTIONS = ["-h", "--help"]
 
 
 def add_default_command(argv, commands):
@@ -16,7 +18,7 @@ def add_default_command(argv, commands):
         return argv
     if argv[0] in commands:  # already a command
         return argv
-    if argv[0].startswith("-"):  # an option like --help, not a video
+    if argv[0] in TOP_OPTIONS:  # an option like --help, not a video
         return argv
     return ["prep"] + argv
 
