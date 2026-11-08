@@ -40,6 +40,12 @@ def parse_args(argv=None):
         nargs="?",
         help="Where the file will be moved to. (Leave empty for default)",
     )
+    prep.add_argument(
+        "-c",
+        "--copy",
+        action="store_true",
+        help="Copy the processed file to the destination.",
+    )
     prep.set_defaults(func=cmd_prep)
 
     config = sub.add_parser("config", help="Change the configuration file.")

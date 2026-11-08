@@ -147,8 +147,12 @@ def cmd_prep(args) -> int:
                 return 1
 
         target_path.mkdir(parents=True, exist_ok=True)
-        shutil.move(file_path, new_file_path)
-        logger.info("Moved %s -> %s", file_path, new_file_path)
+        if args.copy:
+            shutil.copy2(file_path, new_file_path)
+            logger.info("Copied %s -> %s", file_path, new_file_path)
+        else:
+            shutil.move(file_path, new_file_path)
+            logger.info("Moved %s -> %s", file_path, new_file_path)
         print(f"{green('✓')} {short_path(new_file_path)}")
         return 0
     except UnsupportedFileError:
