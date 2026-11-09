@@ -78,7 +78,7 @@ temp homes. Run the suite after every change to `main()`; add a scenario for eac
 
 _Last updated: 2026-11-09_
 
-**`feature/options` → `main`: PR opened 2026-11-09, merged without a release.** 63/63 passing. Plan: start
+**`feature/options` → `main`: PR opened 2026-11-09, to be merged without a release.** 63/63 passing. Plan: start
 `feature/manual-edit` from `main` next; batch (below) comes after that; **0.4.0** is released once batch is done.
 What the PR brings:
 - **Choose prompt reworked** (Fidel): `l` (any case) = loose search, `0` = cancel (were `0` / `-1`).
