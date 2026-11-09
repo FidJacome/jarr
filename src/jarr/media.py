@@ -1,5 +1,6 @@
 from guessit import guessit
 
+
 class Media:
     def __init__(self, path, title, year, kind, extension, season=None, episode=None):
         self.path = path

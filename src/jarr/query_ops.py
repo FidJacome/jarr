@@ -17,10 +17,6 @@ class TMDBError(Exception):
     pass
 
 
-class NoMatchError(Exception):
-    pass
-
-
 def TMDB_query(media: "Media", loose_query: bool, token) -> list["TMDBMatch"]:
     url: str = f"{TMDB_URL}{SEARCH_ENDPOINTS[media.kind]}"
     headers = {"accept": "application/json", "Authorization": f"Bearer {token}"}
@@ -54,7 +50,7 @@ def TMDB_query(media: "Media", loose_query: bool, token) -> list["TMDBMatch"]:
 
     results = data.get("results")
     if not results and loose_query == True:
-        raise NoMatchError(f"No matches found for {media.title}")
+        return []
 
     query_results: list["TMDBMatch"] = []
     for result in results[:3]:
