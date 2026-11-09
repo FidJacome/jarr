@@ -135,8 +135,15 @@ Optional improvements noted along the way:
 
 ### Learning notes
 
-- Fidel learns best with **pseudocode first** and concrete analogies (nested dicts = folder tree, `current_pos` =
-  current directory), plus hand-traced tables. Introduce new concepts with a short lesson + exercise before using them.
+- **When Fidel asks for help building or fixing something, guide with questions, not pseudocode** (his request,
+  2026-11-09: ready-made pseudocode left him "just translating the code you give me into python"). Make him think
+  about how the system works: what a function receives and returns, which part of the code knows the information
+  needed, which cases can happen, what happens today when an input is traced through the code. One or two questions
+  at a time; let him propose the approach. If he's stuck, give hints that get more specific step by step;
+  pseudocode only if he asks for it. Reviews ("check it") still name bugs directly (file, line, what goes wrong);
+  the fix can be phrased as a question.
+- Concrete analogies help (nested dicts = folder tree, `current_pos` = current directory), plus hand-traced tables.
+  Introduce new concepts with a short lesson + exercise before using them.
 - Lessons done: file I/O, TOML (`tomllib`/`tomli_w`), dict walking. A 5-part dictionary exercise set
   (`.get`, comprehensions, copy vs reference, `setdefault`/`get_config`, recursion/`flatten`) was handed out on
   2026-11-04; status unknown. `get_config` and `flatten` + `mask` feed into `jarr config show`.
