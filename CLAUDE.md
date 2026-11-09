@@ -31,7 +31,7 @@ moves it into Jellyfin's recommended folder layout (`movie/Title (Year) [tmdbid-
 - Python ≥ 3.13, managed with **uv** (`uv sync`, `uv run jarr <video>`)
 - Entry point: `jarr = "jarr:main"` → `src/jarr/__init__.py`
 - Dependencies: guessit, requests, tomli-w
-- Tests: `uv run tests/run_tests.py` (58 end-to-end scenarios; see Testing below)
+- Tests: `uv run tests/run_tests.py` (63 end-to-end scenarios; see Testing below)
 - Practice exercises and prototypes live in a separate **private** repo, `FidJacome/jarr-practice`, cloned next to
   this one (`practice/` lessons, `prototypes/` drafts of jarr functions). Keep them out of this public repo.
 - Workspace layout: `~/code/jarr-root/` (not a git repo) holds both clones, `jarr/` and `jarr-practice/`. Sessions
@@ -76,38 +76,53 @@ temp homes. Run the suite after every change to `main()`; add a scenario for eac
 
 ## Current status
 
-_Last updated: 2026-11-07_
+_Last updated: 2026-11-09_
 
-**Open branch: `feature/options`** (pushed, no PR yet). 58/58 passing. What's on it:
+**`feature/options` → `main`: PR opened 2026-11-09, merged without a release.** 63/63 passing. Plan: start
+`feature/manual-edit` from `main` next; batch (below) comes after that; **0.4.0** is released once batch is done.
+What the PR brings:
 - **Choose prompt reworked** (Fidel): `l` (any case) = loose search, `0` = cancel (were `0` / `-1`).
   `TMDB_select(results, allow_loose)` returns `int | str` and only offers/accepts `l` when `allow_loose` is true.
-  `prep` passes `media.year and not loose` (not a real `bool`, works by truthiness; `bool(...)` would match the
-  annotation), so there's **at most one loose search**, none when the first search was already loose, and none
-  without a year. "Search TMDB?" also hides `[l]oose` when there's no year.
-- Claude's tests: P8 (`0` cancels, video not moved), P9 (`L` runs one loose search), P10–P12 (second `l`
-  rejected; `l` rejected after a loose first search; `l` rejected without a year). The harness prints
-  `__LOOSE__=[...]`, the loose flag of each search. Each was checked to fail against the bug it guards.
+  `prep` passes `media.year and not loose` (not a real `bool`, works by truthiness), so there's **at most one
+  loose search**, none when the first search was already loose, and none without a year.
+- **`-c/--copy`** (Fidel): `shutil.copy2` instead of `shutil.move`, logs "Copied".
+- **Shortcut denylist** (Fidel): `add_default_command` leaves argv alone only if `argv[0]` is in
+  `TOP_OPTIONS = ["-h", "--help"]`, so prep options work before the video (`jarr -c movie.mkv`). Will be removed
+  with batch (see below).
+- Claude's tests: P8–P12 (cancel, one loose search), P13–P16 (move vs copy, `-c` before/after the video,
+  `--copy` with a folder), K7 (`-h` = top-level help). Each was checked to fail against the bug it guards.
 - **Flaky suite fixed** (`e7d8c76`): `Media.from_path` passes the last 3 path parts to guessit, and the random
   temp home name was one of them; ~1 in 750 names (e.g. `jarrtest-e65_pnop`) read as an episode, so ~6% of runs
-  failed. Homes are now `tests/homes/run-*/home001...`; 40 runs in a row passed.
+  failed. Homes are now `tests/homes/run-*/home001...`.
 
-**Not in jarr yet: the `-c/--copy` prep option.** The `jarr <video>` shortcut broke for options typed before the
-video (`jarr -c movie.mkv`). Decided to keep the shortcut with a **denylist**: `add_default_command` leaves argv
-alone only if `argv[0]` is a *top-level* option (`TOP_OPTIONS = ["-h", "--help"]`); every other first word gets
-`prep` in front, so new prep options need no change in `cli.py`. Worked out and passing in
-`jarr-practice/practice/subcommands.py` (uncommitted there; still has debug prints, a `config dir` crash on
-`args.path`, a redundant `startswith` check, and no `-c` tests). To port: the denylist, `-c` with a `help=`, and
-a "Copied" log line instead of "Moved" for copies (`prep.py`, the `logger.info("Moved ...")` line).
+**Next: manual edit** (`feature/manual-edit`, not started). The summary line shows guessit's reading before
+"Search TMDB?", so a misread (e.g. a folder name read as an episode) is visible, but the only way out today is
+cancelling. Idea: add `[e]dit` there; edit `Media` fields (kind, title, year, season/episode) with "Enter keeps
+the current value", validate like `ask()`, then show the summary and ask again (a loop, a good first piece to
+split out of `cmd_prep`). Switching to movie clears season/episode; removing the year hides `[l]oose`. Open
+questions: field by field or a menu? Also offer it on "no match"? Check how mnamer handles misreads first.
+Keeping parent folders in guessit's input was deliberate (needed for `Show/Season 01/` layouts); the edit option
+is the answer to misreads. Batch's report-at-the-end mode will reuse it.
 
-**Next feature idea: manual edit** (discussed 2026-11-07, not started). The summary line shows guessit's reading
-before "Search TMDB?", so a misread (e.g. a folder name read as an episode) is visible, but the only way out today
-is cancelling. Idea: add `[e]dit` there; edit `Media` fields (kind, title, year, season/episode) with "Enter
-keeps the current value", validate like `ask()` (e.g. an `ask_value(prompt, current, convert)` helper), then show
-the summary and ask again (a loop, which is also a good first piece to split out of `cmd_prep`). Switching to
-movie clears season/episode; removing the year hides `[l]oose`. Open questions: also offer it on "no match"?
-Field by field or a menu? Check how mnamer handles misreads first. Do it on its own branch after
-`feature/options` is merged. Keeping parent folders in guessit's input was a deliberate choice (needed for
-`Show/Season 01/` layouts); the edit option is the answer to misreads.
+**After that: batch** (decided 2026-11-09, not started; bigger restructure, done after manual edit):
+- **Its own subcommand** (`jarr batch`, `commands/batch.py`), not a prep option: it behaves differently (mostly
+  unattended, few prompts). Options considered: `-r` for subfolders; multiple files and/or folders as input.
+- **Separate the work from the prompts first.** Split `cmd_prep` into work steps (token, destination, parse,
+  search, build target path, move/copy) and user-facing steps; prompts go to `prompts.py`. `TMDB_select` is mostly
+  a prompt and probably moves there. `prep` and `batch` share the work steps instead of duplicating them.
+- **Destination becomes an option, `--destination` (long form only).** Reason: with several input paths
+  (`nargs="+"`), an optional positional destination can't be told apart from an input (argparse is greedy; tried
+  in practice). **The `jarr <video>` shortcut gets removed** (too much upkeep). Both are breaking → **0.4.0**,
+  with "Upgrading from 0.3.0" notes (shortcut, `--destination`, Choose keys).
+- **Confirmation at the start** with the number of files and total size; batch therefore collects the full file
+  list before processing any file (two phases). A move within one disk needs no space; across disks it's a copy +
+  delete, and a copy always needs the space. Open question: how to tell whether two paths are on the same disk.
+- **Picking a TMDB result without asking:** take the top result when its title and year match guessit's and no
+  other result matches as well; anything else is ambiguous. Watch out for: episodes without a year (UK vs US "The
+  Office"), titles that differ only in punctuation/`&`/case (exact vs cleaned-up comparison), year off by one,
+  translated titles.
+- **Ambiguous cases, user's choice via an option:** stop and ask right away, or finish the batch and list them at
+  the end with an offer to edit each (reuses manual edit).
 
 **v0.3.0 released (2026-11-06)**: PR #2 (`feature/subcommands` → `main`, merge commit), tag `v0.3.0`, GitHub
 pre-release with user-facing notes.
@@ -123,14 +138,14 @@ What went into v0.3.0:
 **Release steps used (repeat for the next release):** bump `version` in `pyproject.toml` + `uv lock`; PR the feature
 branch into `main` and merge with **"Create a merge commit"** (never squash, see the transparency rule); annotated
 tag on the merge commit; GitHub release marked **pre-release** with hand-written user-facing notes (New / Improved /
-Upgrading from the previous version). The Choose-prompt change (`0`/`-1` → `l`/`0`) is user-visible: mention it.
+Upgrading from the previous version).
 
 Optional improvements noted along the way:
 - `save_config`: write to a temp file and `Path.replace()` it (atomic write), and create it as 0600 from the start
   (`os.open`) instead of `chmod` afterwards.
 - Ruff reports import-order (`I001`) in `commands/prep.py` and `media.py`; `ruff check --fix` sorts them.
 - `cmd_prep` is one long function; it could be split into steps (find token, choose destination, search, move).
-- Test scenario numbering is out of order (P8–P12 sit before P5 in `run_tests.py`); cosmetic.
+- Test scenario numbering is out of order (P8–P16 sit before P5 in `run_tests.py`); cosmetic.
 - Phase 2 (send files to the Jellyfin server) is still the big roadmap item.
 
 ### Learning notes
