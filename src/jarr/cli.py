@@ -38,13 +38,13 @@ def parse_args(argv=None):
         "destination_dir",
         type=Path,
         nargs="?",
-        help="Where the file will be moved to. (Leave empty for default)",
+        help="Where the processed file will land. (Leave empty for default)",
     )
     prep.add_argument(
         "-c",
         "--copy",
         action="store_true",
-        help="Copy the processed file to the destination.",
+        help="Instead of moving, copy the file to the destination.",
     )
     prep.set_defaults(func=cmd_prep)
 
