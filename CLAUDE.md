@@ -31,7 +31,7 @@ moves it into Jellyfin's recommended folder layout (`movie/Title (Year) [tmdbid-
 - Python ≥ 3.13, managed with **uv** (`uv sync`, `uv run jarr <video>`)
 - Entry point: `jarr = "jarr:main"` → `src/jarr/__init__.py`
 - Dependencies: guessit, requests, tomli-w
-- Tests: `uv run tests/run_tests.py` (53 end-to-end scenarios; see Testing below)
+- Tests: `uv run tests/run_tests.py` (63 end-to-end scenarios; see Testing below)
 - Practice exercises and prototypes live in a separate **private** repo, `FidJacome/jarr-practice`, cloned next to
   this one (`practice/` lessons, `prototypes/` drafts of jarr functions). Keep them out of this public repo.
 - Workspace layout: `~/code/jarr-root/` (not a git repo) holds both clones, `jarr/` and `jarr-practice/`. Sessions
@@ -76,46 +76,89 @@ temp homes. Run the suite after every change to `main()`; add a scenario for eac
 
 ## Current status
 
-_Last updated: 2026-11-06_
+_Last updated: 2026-11-09_
+
+**`feature/options` → `main`: PR opened 2026-11-09, to be merged without a release.** 63/63 passing. Plan: start
+`feature/manual-edit` from `main` next; batch (below) comes after that; **0.4.0** is released once batch is done.
+What the PR brings:
+- **Choose prompt reworked** (Fidel): `l` (any case) = loose search, `0` = cancel (were `0` / `-1`).
+  `TMDB_select(results, allow_loose)` returns `int | str` and only offers/accepts `l` when `allow_loose` is true.
+  `prep` passes `media.year and not loose` (not a real `bool`, works by truthiness), so there's **at most one
+  loose search**, none when the first search was already loose, and none without a year.
+- **`-c/--copy`** (Fidel): `shutil.copy2` instead of `shutil.move`, logs "Copied".
+- **Shortcut denylist** (Fidel): `add_default_command` leaves argv alone only if `argv[0]` is in
+  `TOP_OPTIONS = ["-h", "--help"]`, so prep options work before the video (`jarr -c movie.mkv`). Will be removed
+  with batch (see below).
+- Claude's tests: P8–P12 (cancel, one loose search), P13–P16 (move vs copy, `-c` before/after the video,
+  `--copy` with a folder), K7 (`-h` = top-level help). Each was checked to fail against the bug it guards.
+- **Flaky suite fixed** (`e7d8c76`): `Media.from_path` passes the last 3 path parts to guessit, and the random
+  temp home name was one of them; ~1 in 750 names (e.g. `jarrtest-e65_pnop`) read as an episode, so ~6% of runs
+  failed. Homes are now `tests/homes/run-*/home001...`.
+
+**Next: manual edit** (`feature/manual-edit`, not started). The summary line shows guessit's reading before
+"Search TMDB?", so a misread (e.g. a folder name read as an episode) is visible, but the only way out today is
+cancelling. Idea: add `[e]dit` there; edit `Media` fields (kind, title, year, season/episode) with "Enter keeps
+the current value", validate like `ask()`, then show the summary and ask again (a loop, a good first piece to
+split out of `cmd_prep`). Switching to movie clears season/episode; removing the year hides `[l]oose`. Open
+questions: field by field or a menu? Also offer it on "no match"? Check how mnamer handles misreads first.
+Keeping parent folders in guessit's input was deliberate (needed for `Show/Season 01/` layouts); the edit option
+is the answer to misreads. Batch's report-at-the-end mode will reuse it.
+
+**After that: batch** (decided 2026-11-09, not started; bigger restructure, done after manual edit):
+- **Its own subcommand** (`jarr batch`, `commands/batch.py`), not a prep option: it behaves differently (mostly
+  unattended, few prompts). Options considered: `-r` for subfolders; multiple files and/or folders as input.
+- **Separate the work from the prompts first.** Split `cmd_prep` into work steps (token, destination, parse,
+  search, build target path, move/copy) and user-facing steps; prompts go to `prompts.py`. `TMDB_select` is mostly
+  a prompt and probably moves there. `prep` and `batch` share the work steps instead of duplicating them.
+- **Destination becomes an option, `--destination` (long form only).** Reason: with several input paths
+  (`nargs="+"`), an optional positional destination can't be told apart from an input (argparse is greedy; tried
+  in practice). **The `jarr <video>` shortcut gets removed** (too much upkeep). Both are breaking → **0.4.0**,
+  with "Upgrading from 0.3.0" notes (shortcut, `--destination`, Choose keys).
+- **Confirmation at the start** with the number of files and total size; batch therefore collects the full file
+  list before processing any file (two phases). A move within one disk needs no space; across disks it's a copy +
+  delete, and a copy always needs the space. Open question: how to tell whether two paths are on the same disk.
+- **Picking a TMDB result without asking:** take the top result when its title and year match guessit's and no
+  other result matches as well; anything else is ambiguous. Watch out for: episodes without a year (UK vs US "The
+  Office"), titles that differ only in punctuation/`&`/case (exact vs cleaned-up comparison), year off by one,
+  translated titles.
+- **Ambiguous cases, user's choice via an option:** stop and ask right away, or finish the batch and list them at
+  the end with an offer to edit each (reuses manual edit).
 
 **v0.3.0 released (2026-11-06)**: PR #2 (`feature/subcommands` → `main`, merge commit), tag `v0.3.0`, GitHub
-pre-release with user-facing notes. `main` is the current state; there's no open feature branch.
+pre-release with user-facing notes.
 
 What went into v0.3.0:
 - Settings moved from `~/.config/jarr/.env` to `config.toml` (`c963398`). `python-dotenv` and `ENV_PATH` removed.
   **No migration from `.env`** (deliberate: sole user, settings trivial to re-enter); the README has an
   "Upgrading from 0.2.0" note instead.
 - Tests moved into the repo as `tests/` (`9537fdf`).
-- **Subcommands done (2026-11-06).** Fidel wrote `cli.py`, `commands/prep.py`, `commands/config.py` and
-  `prompts.py`, and reduced `main()` to a dispatcher. `-t`/`-d` are gone:
-  - `jarr prep <video> [folder]`, with `jarr <video> [folder]` as a shortcut
-  - `jarr config token`, `config dir <folder>` (expands `~`, resolves, offers to create a missing folder; declining
-    exits 130), `config show` (secrets masked by name, e.g. `token: ****3456`), `config path`
-- Claude's commits on top: the logging fix in `main()`, the test harness patching
-  `jarr.commands.prep.TMDB_query` (patch where a name is *used*), `config show` masking + empty-config message,
-  the test rewrite (53/53 passing) and the README Commands table.
+- Subcommands: `jarr prep <video> [folder]` (shortcut `jarr <video> [folder]`), `jarr config token`,
+  `config dir <folder>`, `config show` (secrets masked), `config path`. `-t`/`-d` are gone.
 
 **Release steps used (repeat for the next release):** bump `version` in `pyproject.toml` + `uv lock`; PR the feature
 branch into `main` and merge with **"Create a merge commit"** (never squash, see the transparency rule); annotated
 tag on the merge commit; GitHub release marked **pre-release** with hand-written user-facing notes (New / Improved /
 Upgrading from the previous version).
 
-**Next:** not decided yet. Candidates: Phase 2 (send files to the Jellyfin server), or the optional improvements
-below. Start new work on a new feature branch from `main`.
-
 Optional improvements noted along the way:
 - `save_config`: write to a temp file and `Path.replace()` it (atomic write), and create it as 0600 from the start
   (`os.open`) instead of `chmod` afterwards.
 - Ruff reports import-order (`I001`) in `commands/prep.py` and `media.py`; `ruff check --fix` sorts them.
 - `cmd_prep` is one long function; it could be split into steps (find token, choose destination, search, move).
-- **Possible flaky test:** one suite run on 2026-11-06 reported 52/53, then 42 runs in a row passed 53/53. Which
-  scenario failed wasn't captured (output was cut to the last line). If it happens again, keep the full output
-  (the `FAIL` block prints rc, output and config.toml) before rerunning.
+- Test scenario numbering is out of order (P8–P16 sit before P5 in `run_tests.py`); cosmetic.
+- Phase 2 (send files to the Jellyfin server) is still the big roadmap item.
 
 ### Learning notes
 
-- Fidel learns best with **pseudocode first** and concrete analogies (nested dicts = folder tree, `current_pos` =
-  current directory), plus hand-traced tables. Introduce new concepts with a short lesson + exercise before using them.
+- **When Fidel asks for help building or fixing something, guide with questions, not pseudocode** (his request,
+  2026-11-09: ready-made pseudocode left him "just translating the code you give me into python"). Make him think
+  about how the system works: what a function receives and returns, which part of the code knows the information
+  needed, which cases can happen, what happens today when an input is traced through the code. One or two questions
+  at a time; let him propose the approach. If he's stuck, give hints that get more specific step by step;
+  pseudocode only if he asks for it. Reviews ("check it") still name bugs directly (file, line, what goes wrong);
+  the fix can be phrased as a question.
+- Concrete analogies help (nested dicts = folder tree, `current_pos` = current directory), plus hand-traced tables.
+  Introduce new concepts with a short lesson + exercise before using them.
 - Lessons done: file I/O, TOML (`tomllib`/`tomli_w`), dict walking. A 5-part dictionary exercise set
   (`.get`, comprehensions, copy vs reference, `setdefault`/`get_config`, recursion/`flatten`) was handed out on
   2026-11-04; status unknown. `get_config` and `flatten` + `mask` feed into `jarr config show`.

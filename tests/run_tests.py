@@ -25,6 +25,8 @@ EPISODE = "Breaking.Bad.S01E02.720p.mkv"
 MOVIE_REL = "movie/The Matrix (1999) [tmdbid-603]/The Matrix (1999).mkv"
 TV_REL = "tv/Breaking Bad (2008) [tmdbid-1396]/Season 01/Breaking Bad S01E02.mkv"
 results, homes = [], []
+(HERE / "homes").mkdir(exist_ok=True)
+RUN_DIR = Path(tempfile.mkdtemp(prefix="run-", dir=HERE / "homes"))  # one per suite run
 
 
 # ---------- helpers ----------
@@ -40,8 +42,12 @@ def run(home, argv, inputs=("y", "1"), secrets=(), cwd=None, env_extra=None):
 
 
 def setup(token=True, default=None):
-    (HERE / "homes").mkdir(exist_ok=True)
-    home = Path(tempfile.mkdtemp(prefix="jarrtest-", dir=HERE / "homes"))
+    # jarr passes the last 3 path parts to guessit (home/dl/video), so the home folder's name is
+    # part of what gets parsed. Random names like "jarrtest-e65_pnop" sometimes read as an episode
+    # (e65), which made the suite flaky. Fixed names (home001, ...) parse cleanly; the random part
+    # lives one level up, in RUN_DIR, where guessit never sees it.
+    home = RUN_DIR / f"home{len(homes) + 1:03d}"
+    home.mkdir()
     homes.append(home)
     (home / "dl").mkdir()
     for n in (MOVIE, EPISODE):
@@ -190,6 +196,65 @@ h = setup()
 rc, out = run(h, [str(h / "dl" / MOVIE)], inputs=["n"])
 check("P4 answering 'n' to the search -> cancelled, video not moved",
       rc == 130 and "Traceback" not in out and (h / "dl" / MOVIE).exists(), rc, out, h)
+
+h = setup()
+rc, out = run(h, [str(h / "dl" / MOVIE)], inputs=["y", "0"])
+check("P8 '0' at Choose -> cancelled, video not moved to any match",
+      rc == 130 and "Traceback" not in out and (h / "dl" / MOVIE).exists()
+      and not (h / "staging" / "movie").exists(), rc, out, h)
+
+h = setup()
+rc, out = run(h, [str(h / "dl" / MOVIE)], inputs=["y", "L", "1"])
+check("P9 'L' at Choose -> second search ignores the year, then the pick is moved",
+      ok_run(rc, out) and "__LOOSE__=[False, True]" in out
+      and (h / "staging" / MOVIE_REL).exists(), rc, out, h)
+
+h = setup()
+rc, out = run(h, [str(h / "dl" / MOVIE)], inputs=["y", "L", "L", "1"])
+check("P10 only one loose search: a second 'L' is rejected, then the pick is moved",
+      ok_run(rc, out) and "__LOOSE__=[False, True]" in out
+      and (h / "staging" / MOVIE_REL).exists(), rc, out, h)
+
+h = setup()
+rc, out = run(h, [str(h / "dl" / MOVIE)], inputs=["l", "l", "1"])
+check("P11 loose at 'Search TMDB?' -> 'l' rejected at Choose, no second search",
+      ok_run(rc, out) and "__LOOSE__=[True]" in out
+      and (h / "staging" / MOVIE_REL).exists(), rc, out, h)
+
+h = setup()
+rc, out = run(h, [str(h / "dl" / EPISODE)], inputs=["y", "l", "1"])
+check("P12 no year in the filename -> 'l' rejected at Choose, no second search",
+      ok_run(rc, out) and "__LOOSE__=[False]" in out
+      and (h / "staging" / TV_REL).exists(), rc, out, h)
+
+h = setup()
+rc, out = run(h, [str(h / "dl" / MOVIE)])
+check("P13 no -c -> moved: in the library, original gone",
+      ok_run(rc, out) and (h / "staging" / MOVIE_REL).exists()
+      and not (h / "dl" / MOVIE).exists(), rc, out, h)
+
+
+def copied(h, rel=MOVIE_REL):
+    """The video is in the library with the same contents, and the original is still in dl/."""
+    dest, orig = h / "staging" / rel, h / "dl" / MOVIE
+    return dest.is_file() and orig.is_file() and dest.read_bytes() == orig.read_bytes()
+
+
+h = setup()
+rc, out = run(h, ["-c", str(h / "dl" / MOVIE)])
+check("P14 'jarr -c <video>' -> copied, original kept (option before the video)",
+      ok_run(rc, out) and copied(h), rc, out, h)
+
+h = setup()
+rc, out = run(h, [str(h / "dl" / MOVIE), "-c"])
+check("P15 'jarr <video> -c' -> copied, original kept (option after the video)",
+      ok_run(rc, out) and copied(h), rc, out, h)
+
+h = setup()
+rc, out = run(h, ["prep", "--copy", str(h / "dl" / MOVIE), str(h / "lib")])
+check("P16 'jarr prep --copy <video> <folder>' -> copied into the folder, original kept",
+      ok_run(rc, out) and (h / "lib" / MOVIE_REL).is_file() and (h / "dl" / MOVIE).is_file()
+      and not (h / "staging").exists(), rc, out, h)
 
 h = setup()
 rc, out = run(h, [str(h / "dl" / "missing.mkv")])
@@ -355,6 +420,11 @@ rc, out = run(h, ["--help"])
 check("K6 '--help' -> help, not treated as a video",
       rc == 0 and "usage:" in out and "Search TMDB" not in out, rc, out, h)
 
+h = setup()
+rc, out = run(h, ["-h"])
+check("K7 '-h' -> top-level help (lists the commands), not prep's",
+      rc == 0 and "{prep,config}" in out and "Search TMDB" not in out, rc, out, h)
+
 
 # ---------- unusable destinations ----------
 section("unusable destinations")
@@ -433,6 +503,7 @@ check("C8 an old .env is ignored (no migration, by design)",
 passed = sum(ok for _, ok in results)
 print(f"\n{passed}/{len(results)} passed")
 if not os.getenv("KEEP"):
-    for d in homes:
-        shutil.rmtree(d, ignore_errors=True)
+    shutil.rmtree(RUN_DIR, ignore_errors=True)
+else:
+    print(f"Kept: {RUN_DIR}")
 sys.exit(0 if passed == len(results) else 1)

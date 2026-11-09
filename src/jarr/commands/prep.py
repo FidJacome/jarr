@@ -93,23 +93,27 @@ def cmd_prep(args) -> int:
         )
         print(dim(file_path.name))
         print(f"{bold(media.title)}{year}  {dim(kind)}")
-        answer = ask(
-            f"Search TMDB? {dim('[Y]es / [l]oose (ignore year) / [n]o')} ",
-            ["y", "l", "n"],
-            "y",
-        )
+        if media.year:
+            answer = ask(
+                f"Search TMDB? {dim('[Y]es / [l]oose (ignore year) / [n]o')} ",
+                ["y", "l", "n"],
+                "y",
+            )
+        else:
+            answer = ask(f"Search TMDB? {dim('[Y]es / [n]o')} ", ["y", "n"], "y")
         if answer == "n":
             raise KeyboardInterrupt
 
         try:
+            loose = answer == "l"
             print(dim("Searching TMDB..."))
-            tmdb_results = TMDB_query(media, answer == "l", token)
-            option = TMDB_select(tmdb_results)
-            while option == 0:
+            tmdb_results = TMDB_query(media, loose, token)
+            option = TMDB_select(tmdb_results, (media.year and not loose))
+            if option == "l":
                 print(dim("Searching TMDB, ignoring the year..."))
                 tmdb_results = TMDB_query(media, True, token)
-                option = TMDB_select(tmdb_results)
-            if option == -1:
+                option = TMDB_select(tmdb_results, False)
+            if option == 0:
                 raise KeyboardInterrupt
         except TMDBError as e:
             logger.error(e)
@@ -143,8 +147,12 @@ def cmd_prep(args) -> int:
                 return 1
 
         target_path.mkdir(parents=True, exist_ok=True)
-        shutil.move(file_path, new_file_path)
-        logger.info("Moved %s -> %s", file_path, new_file_path)
+        if args.copy:
+            shutil.copy2(file_path, new_file_path)
+            logger.info("Copied %s -> %s", file_path, new_file_path)
+        else:
+            shutil.move(file_path, new_file_path)
+            logger.info("Moved %s -> %s", file_path, new_file_path)
         print(f"{green('✓')} {short_path(new_file_path)}")
         return 0
     except UnsupportedFileError:
