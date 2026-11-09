@@ -78,9 +78,10 @@ temp homes. Run the suite after every change to `main()`; add a scenario for eac
 
 _Last updated: 2026-11-09_
 
-**`feature/options` → `main`: PR opened 2026-11-09, to be merged without a release.** 63/63 passing. Plan: start
-`feature/manual-edit` from `main` next; batch (below) comes after that; **0.4.0** is released once batch is done.
-What the PR brings:
+**Now on `feature/manual-edit` (WIP `156ebb6`, suite 0/63, see "Manual edit" below).** Batch comes after
+manual edit; **0.4.0** is released once batch is done.
+
+**`feature/options` → `main`: PR #3 merged 2026-11-09 (merge commit `bb371b2`), no release.** What it brought:
 - **Choose prompt reworked** (Fidel): `l` (any case) = loose search, `0` = cancel (were `0` / `-1`).
   `TMDB_select(results, allow_loose)` returns `int | str` and only offers/accepts `l` when `allow_loose` is true.
   `prep` passes `media.year and not loose` (not a real `bool`, works by truthiness), so there's **at most one
@@ -95,14 +96,43 @@ What the PR brings:
   temp home name was one of them; ~1 in 750 names (e.g. `jarrtest-e65_pnop`) read as an episode, so ~6% of runs
   failed. Homes are now `tests/homes/run-*/home001...`.
 
-**Next: manual edit** (`feature/manual-edit`, not started). The summary line shows guessit's reading before
+**Manual edit** (`feature/manual-edit`, in progress). The summary line shows guessit's reading before
 "Search TMDB?", so a misread (e.g. a folder name read as an episode) is visible, but the only way out today is
-cancelling. Idea: add `[e]dit` there; edit `Media` fields (kind, title, year, season/episode) with "Enter keeps
+cancelling. Plan: add `[e]dit` there; edit `Media` fields (kind, title, year, season/episode) with "Enter keeps
 the current value", validate like `ask()`, then show the summary and ask again (a loop, a good first piece to
-split out of `cmd_prep`). Switching to movie clears season/episode; removing the year hides `[l]oose`. Open
-questions: field by field or a menu? Also offer it on "no match"? Check how mnamer handles misreads first.
+split out of `cmd_prep`). Switching to movie clears season/episode; removing the year hides `[l]oose`.
 Keeping parent folders in guessit's input was deliberate (needed for `Show/Season 01/` layouts); the edit option
 is the answer to misreads. Batch's report-at-the-end mode will reuse it.
+
+Decided 2026-11-09:
+- **Field by field** (not a menu). mnamer check skipped.
+- **Also offered on "no match"**, not only at "Search TMDB?".
+- **The edit returns a new `Media`**; guessit's original stays untouched so batch (and the user) can refer back
+  to it.
+- **No prompts inside `TMDB_query`** (Fidel first proposed calling the edit prompt from there). Reason: batch
+  needs the work steps without prompts, so the caller decides what a no-match means. Fidel's WIP removes
+  `NoMatchError` and returns `[]` instead.
+
+Open questions (asked, not answered yet):
+- Today `NoMatchError` was only raised on a *loose* search (`query_ops.py:56`). On a normal search with no
+  results, `TMDB_query` returned `[]` and `TMDB_select` showed an empty list ("Enter a number between 0 and 0").
+  Trace that: where can "no match" happen, so where must edit be offered?
+- After edit → search → no match again, does the next edit start from guessit's values or the last edit?
+
+**WIP state (`156ebb6`) and review notes (2026-11-09), to fix when resuming:**
+- `prep.py:9` still imports `NoMatchError` → ImportError, `jarr` doesn't start, suite 0/63.
+- `commands/prep_ops.py:38` (`file_deliver`) is unfinished → SyntaxError. It also uses `media.year`; the old
+  code used the TMDB match's year (`selection.year`), and the `/` → `-` title replacement isn't there yet.
+- `check_file`: `resolve(strict=True)` raises `FileNotFoundError`/`OSError` that nothing catches (the old code
+  caught them); the suffix check lost `.lower()` (`movie.MKV` rejected); the directory message has `%s` but no
+  argument (logging prints a "--- Logging error ---" traceback).
+- `select_dest(args)` loads the config again (`cmd_prep` already has it) and takes `args`, which ties it to
+  argparse; for batch, consider passing the typed folder and the config instead.
+- `TMDB_query`: `if not results and loose_query == True: return []` is now redundant (an empty list already
+  gives `[]`), but `data.get("results")` returning `None` would break the slice.
+- `manual_edit` (in `prompts.py`): `input()` gives strings, so year/season/episode are `str` and
+  `f"{media.season:02d}"` in `prep` raises ValueError; no "Enter keeps the current value" or validation yet;
+  asks episode before season.
 
 **After that: batch** (decided 2026-11-09, not started; bigger restructure, done after manual edit):
 - **Its own subcommand** (`jarr batch`, `commands/batch.py`), not a prep option: it behaves differently (mostly
