@@ -46,6 +46,7 @@ moves it into Jellyfin's recommended folder layout (`movie/Title (Year) [tmdbid-
 | `__init__.py` | `main()`: logging setup, `args.func(args)`, and the catch-all for Ctrl+C (130) and unexpected errors (1) |
 | `cli.py` | `parse_args()`: the subcommand tree (`prep`, `config token/dir/show/path`) and `add_default_command(argv, sub.choices)` for the `jarr <video>` shortcut |
 | `commands/prep.py` | `cmd_prep(args)`: file checks, token lookup, destination choice, guessit → TMDB → move |
+| `commands/prep_ops.py` | (WIP) shared work steps for `prep` and `batch`: `check_file`, `select_dest`, `path_constructor`, `deliver_file` |
 | `commands/config.py` | `cmd_config_tkn/dir/show/path(args)`; `SECRET_WORDS` + `is_secret()` + `mask()` for `config show` |
 | `prompts.py` | `ask()` and `ask_token()`, shared by the commands |
 | `config.py` | `load_config()` / `save_config()` for `$XDG_CONFIG_HOME/jarr/config.toml` (chmod 600), `set_config(config, *keys, value)` for nested keys in memory |
@@ -76,9 +77,9 @@ temp homes. Run the suite after every change to `main()`; add a scenario for eac
 
 ## Current status
 
-_Last updated: 2026-11-09_
+_Last updated: 2026-11-10_
 
-**Now on `feature/manual-edit` (WIP `156ebb6`, suite 0/63, see "Manual edit" below).** Batch comes after
+**Now on `feature/manual-edit` (WIP `b0835bd`, suite 0/63, see "Manual edit" below).** Batch comes after
 manual edit; **0.4.0** is released once batch is done.
 
 **`feature/options` → `main`: PR #3 merged 2026-11-09 (merge commit `bb371b2`), no release.** What it brought:
@@ -119,15 +120,23 @@ Open questions (asked, not answered yet):
   Trace that: where can "no match" happen, so where must edit be offered?
 - After edit → search → no match again, does the next edit start from guessit's values or the last edit?
 
-**WIP state (`156ebb6`) and review notes (2026-11-09), to fix when resuming:**
-- `prep.py:9` still imports `NoMatchError` → ImportError, `jarr` doesn't start, suite 0/63.
-- `commands/prep_ops.py:38` (`file_deliver`) is unfinished → SyntaxError. It also uses `media.year`; the old
-  code used the TMDB match's year (`selection.year`), and the `/` → `-` title replacement isn't there yet.
-- `check_file`: `resolve(strict=True)` raises `FileNotFoundError`/`OSError` that nothing catches (the old code
-  caught them); the suffix check lost `.lower()` (`movie.MKV` rejected); the directory message has `%s` but no
-  argument (logging prints a "--- Logging error ---" traceback).
+**WIP state (`b0835bd`) and review notes (2026-11-09, re-checked 2026-11-10), to fix when resuming:**
+- Fixed since `156ebb6`: `file_deliver` is now `deliver_file` (no more SyntaxError), and the path uses the TMDB
+  match's year (`match.year`). `cmd_prep` doesn't use the `prep_ops` helpers yet; the logic still exists twice.
+- `prep.py:9` still imports `NoMatchError` → ImportError, `jarr` doesn't start, suite 0/63 (checked 2026-11-10).
+- `check_file` (`prep_ops.py:13`): `resolve(strict=True)` raises `FileNotFoundError`/`OSError` that nothing
+  catches (the old code caught them); the suffix check lost `.lower()` (`movie.MKV` rejected); the directory
+  message has `%s` but no argument (logging prints a "--- Logging error ---" traceback). Question asked: in batch,
+  what should happen to the other files when one can't be read?
 - `select_dest(args)` loads the config again (`cmd_prep` already has it) and takes `args`, which ties it to
-  argparse; for batch, consider passing the typed folder and the config instead.
+  argparse; for batch, consider passing the typed folder and the config instead (batch's comes from
+  `--destination`).
+- `path_constructor`: the `/` → `-` title replacement (old `prep.py:126`) is still missing ("Face/Off" makes an
+  extra folder). It also **asks the overwrite question itself** and returns `None` on "no", which goes against
+  "separate the work from the prompts" (see batch below) and mixes "user declined" with other failures. Question
+  asked: if batch runs unattended and hits an existing file, who decides, and how do they learn the file exists?
+- `deliver_file` never creates the target folder (old `prep.py:149` did `target_path.mkdir(...)`), so the first
+  delivery of a new title/season fails.
 - `TMDB_query`: `if not results and loose_query == True: return []` is now redundant (an empty list already
   gives `[]`), but `data.get("results")` returning `None` would break the slice.
 - `manual_edit` (in `prompts.py`): `input()` gives strings, so year/season/episode are `str` and
