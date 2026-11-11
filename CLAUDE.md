@@ -45,10 +45,10 @@ moves it into Jellyfin's recommended folder layout (`movie/Title (Year) [tmdbid-
 | --- | --- |
 | `__init__.py` | `main()`: logging setup, `args.func(args)`, and the catch-all for Ctrl+C (130) and unexpected errors (1) |
 | `cli.py` | `parse_args()`: the subcommand tree (`prep`, `config token/dir/show/path`) and `add_default_command(argv, sub.choices)` for the `jarr <video>` shortcut |
-| `commands/prep.py` | `cmd_prep(args)`: file checks, token lookup, destination choice, guessit → TMDB → move |
-| `commands/prep_ops.py` | (WIP) shared work steps for `prep` and `batch`: `check_file`, `select_dest`, `path_constructor`, `deliver_file` |
+| `commands/prep.py` | `cmd_prep(args)`: file checks, token lookup, destination choice, guessit → TMDB → move; (WIP) `new_prep_cmd(args)`, the rewrite on top of `file_ops`, not wired in yet |
+| `commands/file_ops.py` | (WIP, was `prep_ops.py`) shared work steps for `prep` and `batch`: `check_file`, `select_dest`, `media_check`, `path_constructor`, `deliver_file`, `UnsupportedFileError` |
 | `commands/config.py` | `cmd_config_tkn/dir/show/path(args)`; `SECRET_WORDS` + `is_secret()` + `mask()` for `config show` |
-| `prompts.py` | `ask()` and `ask_token()`, shared by the commands |
+| `prompts.py` | `ask()`, `ask_token()` (re-asks until something is typed) and `manual_edit()`, shared by the commands |
 | `config.py` | `load_config()` / `save_config()` for `$XDG_CONFIG_HOME/jarr/config.toml` (chmod 600), `set_config(config, *keys, value)` for nested keys in memory |
 | `constants.py` | Video extensions, TMDB URL, `LOG_FILE`, `CONFIG_DIR` |
 | `media.py` | `Media.from_path()`: parses filename/folders into title, year, kind, season, episode |
@@ -79,8 +79,14 @@ temp homes. Run the suite after every change to `main()`; add a scenario for eac
 
 _Last updated: 2026-11-10_
 
-**Now on `feature/manual-edit` (WIP `8f4f1e9`, suite 0/63, see "Manual edit" below).** Batch comes after
+**Now on `feature/manual-edit` (WIP `a81730c`, suite 0/63, see "Manual edit" below).** Batch comes after
 manual edit; **0.4.0** is released once batch is done.
+
+**Resume here (2026-11-10, end of session):** Fidel is rewriting `cmd_prep` as `new_prep_cmd` on top of
+`file_ops`, and finishing the token lookup in `TMDB_query`. Fix the known issues in the WIP list below first; the
+two open questions on `Media`/`manual_edit` (catch which exceptions, how to clear a value) were asked last and
+are unanswered. **Claude owes:** once `TMDB_query` has settled, switch the harness to fake `requests.get` instead
+of the whole `TMDB_query` (see "Tests" below), update T4/CT2, run the suite.
 
 **`feature/options` → `main`: PR #3 merged 2026-11-09 (merge commit `bb371b2`), no release.** What it brought:
 
@@ -116,6 +122,24 @@ Decided 2026-11-09:
   needs the work steps without prompts, so the caller decides what a no-match means. Fidel's WIP removes
   `NoMatchError` and returns `[]` instead.
 
+Decided 2026-11-10:
+
+- **Errors propagate, callers catch** (instead of returning `None`): `check_file` raises (`OSError`,
+  `UnsupportedFileError`), `select_dest` lets `mkdir`'s `OSError` through. Batch can then catch per file and move
+  on. `UnsupportedFileError` takes the path plus a **reason** passed at the raise site (one class, accurate
+  message, `self.path` kept for batch's report); `check_file` uses `is_file()` (covers dirs, devices) instead of
+  `is_dir()`.
+- **`ask_token` re-asks until something is typed**, like `ask()`; Ctrl+C/Ctrl+D is the way out (130). Returns
+  `str`, never `None`.
+- **Token lookup lives in `TMDB_query`** (env > saved > `ask_token`), taking the config: an **exception** to "no
+  prompts in work steps", like the overwrite prompt, because every caller needs a token. The edit prompt on a
+  no-match stays with the caller. Fidel's plan: save a typed token only after a query succeeds (validates it).
+- **Readiness check after creation, not in `from_path`:** `media_check(media) -> bool` in `file_ops` (title
+  present; episodes need `int` season and episode, so guessit's multi-episode lists fail). Works for guessit's and
+  edited `Media`; the caller decides (prep: manual edit loop; batch: collect not-ready `Media` in a list and
+  revisit at the end). A `bool` is enough: `manual_edit` asks every field and shows current values.
+- **Tests are Claude's to maintain** (Fidel, 2026-11-10).
+
 Open questions (asked, not answered yet):
 
 - Today `NoMatchError` was only raised on a _loose_ search (`query_ops.py:56`). On a normal search with no
@@ -123,24 +147,43 @@ Open questions (asked, not answered yet):
   Trace that: where can "no match" happen, so where must edit be offered?
 - After edit → search → no match again, does the next edit start from guessit's values or the last edit?
 
-**WIP state (`8f4f1e9`) and review notes (updated 2026-11-10), to fix when resuming:**
+**WIP state (`a81730c`) and review notes (updated 2026-11-10, end of session), to fix when resuming:**
 
-- `prep_ops` helpers reviewed 2026-11-10 and look right: `check_file` (catches `OSError`, `.lower()` on the
-  suffix), `select_dest(args_dir, config)` (typed > saved > `~/staging`, `expanduser().resolve()`, and
-  **`mkdir`s the destination up front** so a bad one fails before any query or edit; the `OSError` propagates on
-  purpose), `/` → `-` in titles, `deliver_file` creates the target folder (`new.parents[0]`, `new.parent` is the
-  same). Still open in batch: what happens to the other files when one can't be read?
-- **Next step:** `cmd_prep` doesn't use the helpers yet (logic exists twice); wire them in, with
-  `except OSError as e:` around `select_dest` (log `e`, `return 1`, as old `prep.py:59-64`).
-- `prep.py:9` still imports `NoMatchError` → ImportError, `jarr` doesn't start, suite 0/63 (checked 2026-11-10).
-- Small: `prep_ops.py` has unused imports (`os.path.exists`, `load_config`).
+- `file_ops` helpers (`check_file`, `select_dest`, `/` → `-` in titles, `deliver_file`'s `mkdir`) reviewed and
+  right. `select_dest` `mkdir`s the destination up front so a bad one fails before any query or edit.
+  `media_check` is right (title check fixed to `if not media.title`).
+- `prep.py` still imports `NoMatchError` → ImportError, `jarr` doesn't start, suite 0/63 (checked 2026-11-10).
+- **`new_prep_cmd`** (`prep.py`, not wired into `cli.py` yet; `cmd_prep` is still the live one):
+  - `select_dest(file_checked, config)` passes the **video**, not the typed destination folder → `mkdir` on a
+    file fails.
+  - `except OSError` around `select_dest` logs but doesn't `return 1`, so `destination` is unbound later.
+  - `for file in args.file`: `file` is still a single `Path` (`cli.py:36`, no `nargs`), not iterable.
+  - `load_config()` runs inside the loop (once per file).
+  - It repeats `main()`'s Ctrl+C / catch-all handling.
+  - `check_file` still has the old `try/except OSError` + `is_dir()`; planned: let `OSError` propagate, use
+    `is_file()`, raise `UnsupportedFileError(path, reason)`.
+- **`TMDB_query`** (token lookup moved in): `set_config` + `save_config` run on every call, so **env tokens get
+  written to disk** (breaks the convention) and a token is saved before the query proved it works (Fidel's plan
+  is to save only after success; unfinished). Without a save, a typed token would be asked again on every query
+  (loose search, after an edit, every batch file). Still: `loose_query == True` branch redundant;
+  `data.get("results")` → `None` breaks the slice.
+- **`Media.__init__`** now does `int(season)` / `int(episode)` catching only `ValueError`: `int(None)` (every
+  movie) and `int([1, 2])` (multi-episode) raise **`TypeError`** → crash. Year isn't converted. `"two"` silently
+  becomes `None` (the constructor can't re-ask; that belongs in the prompt, like `ask()`). Question asked: which
+  exceptions to catch, and where does a re-asking check belong?
+- **`manual_edit`**: sets `season`/`episode` after construction, bypassing the `int()` (stay `str`); season falls
+  back to `media.episode` (should be `media.season`); kind prompt has no default; asks episode before season.
+  Question asked: "Enter keeps" leaves no way to **clear** a value (wrong year, switching to movie); what input
+  means "empty"?
 - `path_constructor` asks the overwrite question itself, behind a `prompt: bool` flag: **deliberate**, see
   "Overwrite prompt" under batch below.
-- `TMDB_query`: `if not results and loose_query == True: return []` is now redundant (an empty list already
-  gives `[]`), but `data.get("results")` returning `None` would break the slice.
-- `manual_edit` (in `prompts.py`): `input()` gives strings, so year/season/episode are `str` and
-  `f"{media.season:02d}"` in `prep` raises ValueError; no "Enter keeps the current value" or validation yet;
-  asks episode before season.
+
+**Tests (Claude's):** the harness replaces all of `TMDB_query` in `prep.py` with `fake_query(media, loose,
+token)`, which records the token for `__TOKEN_USED__`. With the token lookup inside `TMDB_query`, that code would
+never run in tests and the fake would record the config dict. Plan: fake `requests.get` instead, so token
+lookup, `ask_token` and result parsing run for real. T4 (`run_tests.py:131`) and CT2 (`:347`) expect exit 1 on a
+blank token; with the re-ask loop the fake `getpass` runs out → `EOFError` → 130. New expectation, e.g. blank
+then a real token → succeeds.
 
 **After that: batch** (decided 2026-11-09, not started; bigger restructure, done after manual edit):
 
