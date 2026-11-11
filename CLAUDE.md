@@ -42,7 +42,7 @@ moves it into Jellyfin's recommended folder layout (`movie/Title (Year) [tmdbid-
 ### Layout (`src/jarr/`)
 
 | File | Purpose |
-|---|---|
+| --- | --- |
 | `__init__.py` | `main()`: logging setup, `args.func(args)`, and the catch-all for Ctrl+C (130) and unexpected errors (1) |
 | `cli.py` | `parse_args()`: the subcommand tree (`prep`, `config token/dir/show/path`) and `add_default_command(argv, sub.choices)` for the `jarr <video>` shortcut |
 | `commands/prep.py` | `cmd_prep(args)`: file checks, token lookup, destination choice, guessit → TMDB → move |
@@ -83,6 +83,7 @@ _Last updated: 2026-11-10_
 manual edit; **0.4.0** is released once batch is done.
 
 **`feature/options` → `main`: PR #3 merged 2026-11-09 (merge commit `bb371b2`), no release.** What it brought:
+
 - **Choose prompt reworked** (Fidel): `l` (any case) = loose search, `0` = cancel (were `0` / `-1`).
   `TMDB_select(results, allow_loose)` returns `int | str` and only offers/accepts `l` when `allow_loose` is true.
   `prep` passes `media.year and not loose` (not a real `bool`, works by truthiness), so there's **at most one
@@ -106,6 +107,7 @@ Keeping parent folders in guessit's input was deliberate (needed for `Show/Seaso
 is the answer to misreads. Batch's report-at-the-end mode will reuse it.
 
 Decided 2026-11-09:
+
 - **Field by field** (not a menu). mnamer check skipped.
 - **Also offered on "no match"**, not only at "Search TMDB?".
 - **The edit returns a new `Media`**; guessit's original stays untouched so batch (and the user) can refer back
@@ -115,12 +117,14 @@ Decided 2026-11-09:
   `NoMatchError` and returns `[]` instead.
 
 Open questions (asked, not answered yet):
-- Today `NoMatchError` was only raised on a *loose* search (`query_ops.py:56`). On a normal search with no
+
+- Today `NoMatchError` was only raised on a _loose_ search (`query_ops.py:56`). On a normal search with no
   results, `TMDB_query` returned `[]` and `TMDB_select` showed an empty list ("Enter a number between 0 and 0").
   Trace that: where can "no match" happen, so where must edit be offered?
 - After edit → search → no match again, does the next edit start from guessit's values or the last edit?
 
 **WIP state (`b0835bd`) and review notes (2026-11-09, re-checked 2026-11-10), to fix when resuming:**
+
 - Fixed since `156ebb6`: `file_deliver` is now `deliver_file` (no more SyntaxError), and the path uses the TMDB
   match's year (`match.year`). `cmd_prep` doesn't use the `prep_ops` helpers yet; the logic still exists twice.
 - `prep.py:9` still imports `NoMatchError` → ImportError, `jarr` doesn't start, suite 0/63 (checked 2026-11-10).
@@ -144,6 +148,7 @@ Open questions (asked, not answered yet):
   asks episode before season.
 
 **After that: batch** (decided 2026-11-09, not started; bigger restructure, done after manual edit):
+
 - **Its own subcommand** (`jarr batch`, `commands/batch.py`), not a prep option: it behaves differently (mostly
   unattended, few prompts). Options considered: `-r` for subfolders; multiple files and/or folders as input.
 - **Separate the work from the prompts first.** Split `cmd_prep` into work steps (token, destination, parse,
@@ -167,6 +172,7 @@ Open questions (asked, not answered yet):
 pre-release with user-facing notes.
 
 What went into v0.3.0:
+
 - Settings moved from `~/.config/jarr/.env` to `config.toml` (`c963398`). `python-dotenv` and `ENV_PATH` removed.
   **No migration from `.env`** (deliberate: sole user, settings trivial to re-enter); the README has an
   "Upgrading from 0.2.0" note instead.
@@ -180,6 +186,7 @@ tag on the merge commit; GitHub release marked **pre-release** with hand-written
 Upgrading from the previous version).
 
 Optional improvements noted along the way:
+
 - `save_config`: write to a temp file and `Path.replace()` it (atomic write), and create it as 0600 from the start
   (`os.open`) instead of `chmod` afterwards.
 - Ruff reports import-order (`I001`) in `commands/prep.py` and `media.py`; `ruff check --fix` sorts them.
@@ -193,7 +200,7 @@ Optional improvements noted along the way:
   2026-11-09: ready-made pseudocode left him "just translating the code you give me into python"). Make him think
   about how the system works: what a function receives and returns, which part of the code knows the information
   needed, which cases can happen, what happens today when an input is traced through the code. One or two questions
-  at a time; let him propose the approach. If he's stuck, give hints that get more specific step by step;
+  at a time; show him snippets of the code that are relevant to the conversation and let him propose the approach. If he's stuck, give hints that get more specific step by step;
   pseudocode only if he asks for it. Reviews ("check it") still name bugs directly (file, line, what goes wrong);
   the fix can be phrased as a question.
 - Concrete analogies help (nested dicts = folder tree, `current_pos` = current directory), plus hand-traced tables.
@@ -207,7 +214,7 @@ Optional improvements noted along the way:
 ### argparse lesson series (finished 2026-11-06)
 
 | # | Topic | Exercise (in `jarr-practice/practice/`) | Status |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | describe vs parse (`parser` = blank form, `args` = filled form), positionals, `Namespace`, `type=`, free `--help`, exit code 2 | `argparse_1.py`: `repeat <word> <times>` | ✅ done |
 | 2 | `nargs="?"` + `default` (no default → `None`), options `-s/--sep`, `store_true` flags, dashes → underscores, usage notation, `parser.error()` | `argparse_2.py`: `word [times] [-s SEP] [-u]` | ✅ done |
 | 3 | `parse_args(argv=None)` + `parse_args(list)`, `if __name__ == "__main__":`, errors raise `SystemExit` (not an `Exception`), `assert`, plain vs relative imports | `test_argparse2.py` with an `exit_code(argv)` helper | ✅ done, tests pass |
@@ -215,11 +222,12 @@ Optional improvements noted along the way:
 | 5 | subcommands: `add_subparsers(dest=..., required=True)`, `add_parser`, nesting, `set_defaults` (a value each subcommand attaches to `args`; `func=` is just one such value), `args.func(args)`, `args` is flat, the `jarr <video>` shortcut | `subcommands.py` + `test_subcommands.py` | ✅ done, tests pass |
 
 Decisions from exercise 5 that carry over to jarr's `cli.py`:
+
 - **Shortcut:** `add_default_command(argv, commands)` returns a new list (`["prep"] + argv`), never mutates. It
   leaves the list alone if it's empty, if `argv[0]` is a known command, or if it starts with `-`. `parse_args` first
   turns `argv=None` into `sys.argv[1:]`, builds the tree, then calls `add_default_command(argv, sub.choices)`.
   Using `sub.choices` (Fidel's idea, not a hardcoded list) keeps the command list in one place. Claude had wrongly
-  claimed it couldn't work; it does, because the check only has to run before *parsing*, not before *building*.
+  claimed it couldn't work; it does, because the check only has to run before _parsing_, not before _building_.
 - Names used: `dest="command"` (top level), `dest="subcommand"` (under `config`), `config dir`'s argument is
   `new_dir`. Each leaf has its own `cmd_...(args)` function; `config` itself has none.
 - Tests cover four groups: parsed values, `args.func is cmd_...`, `add_default_command` directly (incl. a dash in the
@@ -227,7 +235,7 @@ Decisions from exercise 5 that carry over to jarr's `cli.py`:
 
 Common mistakes seen along the way, now understood: reading values from the parser instead of `args` (`prep.file`);
 calling instead of passing a function (`set_defaults(func=print(...))`); reading `args.command.file` (`args` is flat);
-adding `token`/`dir`/`show` as *arguments* of `config` instead of *subcommands*; `parse_args()` without `argv`;
+adding `token`/`dir`/`show` as _arguments_ of `config` instead of _subcommands_; `parse_args()` without `argv`;
 `.insert()` on the caller's list; `"-" in x` instead of `x.startswith("-")`; comparing `Path` with `str`; calling
 `parse_args(["--help"])` in a test without catching `SystemExit`. Also: `int("three")` fails, and in `calc.py` an
 error message should exit non-zero (`sys.exit("msg")` → stderr, exit 1).
