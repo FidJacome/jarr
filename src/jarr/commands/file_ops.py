@@ -1,33 +1,29 @@
 import logging
-from os.path import exists
-from pathlib import Path
 import shutil
+from pathlib import Path
 
-from ..style import short_path, yellow, dim, green
-from ..prompts import ask
-from ..config import load_config
 from ..constants import VIDEO_EXTENSIONS
+from ..media import Media
+from ..prompts import ask
+from ..style import dim, green, short_path, yellow
+from ..tmdbmatch import TMDBMatch
 
 logger = logging.getLogger(__name__)
 
 
-def check_file(file) -> Path | None:
-    try:
-        path_file = Path(file).expanduser().resolve(strict=True)
-    except OSError as e:
-        logger.error("Can't process %s: %s", file, e)
-        return
-    if path_file.is_dir():
-        logger.error("Can't process %s, is a directory", path_file)
-        return
+class UnsupportedFileError(ValueError):
+    def __init__(self, path, reason):
+        self.path = path
+        super().__init__(f"Can't process {path}: {reason}")
+
+
+def check_file(file) -> Path:
+    path_file = Path(file).expanduser().resolve(strict=True)
     if path_file.suffix.lower() not in VIDEO_EXTENSIONS:
-        logger.error(
-            "Can't process %s, %s isn't a supported file type",
-            path_file,
-            path_file.suffix,
-        )
-        return
-    return path_file
+        raise UnsupportedFileError(path_file, "File type not supported.")
+    if path_file.is_file():
+        return path_file
+    raise UnsupportedFileError(path_file, "Not a file.")
 
 
 def select_dest(args_dir: Path, config) -> Path:
@@ -45,7 +41,19 @@ def select_dest(args_dir: Path, config) -> Path:
     return destination
 
 
-def path_constructor(destination, media, match, prompt: bool) -> Path | None:
+def media_check(media: Media) -> bool:
+    if not media.title:
+        return False
+    if media.kind == "episode" and not (
+        isinstance(media.episode, int) and isinstance(media.season, int)
+    ):
+        return False
+    return True
+
+
+def path_constructor(
+    destination: Path, media: Media, match: TMDBMatch, prompt: bool = True
+) -> Path | None:
     title = match.title.replace("/", "-")
     folder_name = f"{title} ({match.year}) [tmdbid-{match.id}]"
     target_path = (

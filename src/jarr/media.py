@@ -8,15 +8,21 @@ class Media:
         self.year = year
         self.kind = kind
         self.extension = extension
-        self.season = season
-        self.episode = episode
+        try:
+            self.season = int(season)
+        except ValueError:
+            self.season = None
+        try:
+            self.episode = int(episode)
+        except ValueError:
+            self.episode = None
 
     @classmethod
     def from_path(cls, path):
         guess = guessit("/".join(path.parts[-3:]))
         return cls(
             path=path,
-            title=guess["title"],
+            title=guess.get("title"),
             year=guess.get("year"),
             kind=guess.get("type"),
             extension=path.suffix,

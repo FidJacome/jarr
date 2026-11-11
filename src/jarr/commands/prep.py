@@ -6,17 +6,19 @@ from pathlib import Path
 from ..config import load_config, save_config, set_config
 from ..constants import VIDEO_EXTENSIONS
 from ..media import Media
+from ..prompts import ask, ask_token, manual_edit
 from ..query_ops import NoMatchError, TMDB_query, TMDB_select, TMDBError
 from ..style import bold, dim, green, short_path, yellow
-from ..prompts import ask, ask_token
+from .file_ops import (
+    check_file,
+    deliver_file,
+    path_constructor,
+    select_dest,
+    media_check,
+    UnsupportedFileError,
+)
 
 logger = logging.getLogger(__name__)
-
-
-class UnsupportedFileError(ValueError):
-    def __init__(self, path):
-        self.path = path
-        super().__init__(f"{path.suffix} is not a supported file type: {path}")
 
 
 def cmd_prep(args) -> int:
@@ -156,4 +158,42 @@ def cmd_prep(args) -> int:
         print(f"{green('✓')} {short_path(new_file_path)}")
         return 0
     except UnsupportedFileError:
+        return 1
+
+
+def new_prep_cmd(args) -> int:
+    try:
+        for file in args.file:
+            config = load_config()
+            try:
+                file_checked = check_file(file)
+            except OSError as e:
+                logger.error("Can't process file: %s", e)
+                return 1
+            except UnsupportedFileError:
+                return 1
+
+            try:
+                destination = select_dest(file_checked, config)
+            except OSError as e:
+                logger.error("Can't create destination directory: %s", e)
+
+            media_guess = Media.from_path(file_checked)
+            if not media_check(media_guess):
+                print(
+                    f"{media_guess.path} isn't ready to be processed: entering manual edit."
+                )
+                while True:
+                    media_guess = manual_edit(media_guess)
+                    if media_check(media_guess):
+                        break
+                    print(
+                        f"{media_guess.path} isn't ready to be processed: entering manual edit."
+                    )
+
+    except (KeyboardInterrupt, EOFError):
+        print("\nCancelled.")
+        return 130
+    except Exception:
+        logger.exception("Unexpected error")
         return 1

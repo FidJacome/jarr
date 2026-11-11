@@ -1,3 +1,5 @@
+import os
+
 import requests
 from requests.exceptions import (
     ConnectionError,
@@ -7,8 +9,11 @@ from requests.exceptions import (
     ReadTimeout,
 )
 
+from jarr.config import save_config, set_config
+
 from .constants import SEARCH_ENDPOINTS, TMDB_URL
 from .media import Media
+from .prompts import ask_token
 from .style import bold, cyan, dim, yellow
 from .tmdbmatch import TMDBMatch
 
@@ -17,7 +22,10 @@ class TMDBError(Exception):
     pass
 
 
-def TMDB_query(media: "Media", loose_query: bool, token) -> list["TMDBMatch"]:
+def TMDB_query(media: "Media", loose_query: bool, config) -> list["TMDBMatch"]:
+    token = os.getenv("TMDB_TOKEN") or config.get("tmdb", {}).get("token")
+    if not token:
+        token = ask_token()
     url: str = f"{TMDB_URL}{SEARCH_ENDPOINTS[media.kind]}"
     headers = {"accept": "application/json", "Authorization": f"Bearer {token}"}
     if media.kind == "movie":
@@ -48,11 +56,14 @@ def TMDB_query(media: "Media", loose_query: bool, token) -> list["TMDBMatch"]:
     except JSONDecodeError as e:
         raise TMDBError("TMDB returned an invalid response") from e
 
+    set_config(config, "tmdb", "token", value=token)
+    save_config(config)
+
     results = data.get("results")
     if not results and loose_query == True:
         return []
 
-    query_results: list["TMDBMatch"] = []
+    query_results: list[TMDBMatch] = []
     for result in results[:3]:
         query_results.append(TMDBMatch(result))
     return query_results
