@@ -79,7 +79,7 @@ temp homes. Run the suite after every change to `main()`; add a scenario for eac
 
 _Last updated: 2026-11-10_
 
-**Now on `feature/manual-edit` (WIP `b0835bd`, suite 0/63, see "Manual edit" below).** Batch comes after
+**Now on `feature/manual-edit` (WIP `8f4f1e9`, suite 0/63, see "Manual edit" below).** Batch comes after
 manual edit; **0.4.0** is released once batch is done.
 
 **`feature/options` → `main`: PR #3 merged 2026-11-09 (merge commit `bb371b2`), no release.** What it brought:
@@ -123,24 +123,19 @@ Open questions (asked, not answered yet):
   Trace that: where can "no match" happen, so where must edit be offered?
 - After edit → search → no match again, does the next edit start from guessit's values or the last edit?
 
-**WIP state (`b0835bd`) and review notes (2026-11-09, re-checked 2026-11-10), to fix when resuming:**
+**WIP state (`8f4f1e9`) and review notes (updated 2026-11-10), to fix when resuming:**
 
-- Fixed since `156ebb6`: `file_deliver` is now `deliver_file` (no more SyntaxError), and the path uses the TMDB
-  match's year (`match.year`). `cmd_prep` doesn't use the `prep_ops` helpers yet; the logic still exists twice.
+- `prep_ops` helpers reviewed 2026-11-10 and look right: `check_file` (catches `OSError`, `.lower()` on the
+  suffix), `select_dest(args_dir, config)` (typed > saved > `~/staging`, `expanduser().resolve()`, and
+  **`mkdir`s the destination up front** so a bad one fails before any query or edit; the `OSError` propagates on
+  purpose), `/` → `-` in titles, `deliver_file` creates the target folder (`new.parents[0]`, `new.parent` is the
+  same). Still open in batch: what happens to the other files when one can't be read?
+- **Next step:** `cmd_prep` doesn't use the helpers yet (logic exists twice); wire them in, with
+  `except OSError as e:` around `select_dest` (log `e`, `return 1`, as old `prep.py:59-64`).
 - `prep.py:9` still imports `NoMatchError` → ImportError, `jarr` doesn't start, suite 0/63 (checked 2026-11-10).
-- `check_file` (`prep_ops.py:13`): `resolve(strict=True)` raises `FileNotFoundError`/`OSError` that nothing
-  catches (the old code caught them); the suffix check lost `.lower()` (`movie.MKV` rejected); the directory
-  message has `%s` but no argument (logging prints a "--- Logging error ---" traceback). Question asked: in batch,
-  what should happen to the other files when one can't be read?
-- `select_dest(args)` loads the config again (`cmd_prep` already has it) and takes `args`, which ties it to
-  argparse; for batch, consider passing the typed folder and the config instead (batch's comes from
-  `--destination`).
-- `path_constructor`: the `/` → `-` title replacement (old `prep.py:126`) is still missing ("Face/Off" makes an
-  extra folder). It also **asks the overwrite question itself** and returns `None` on "no", which goes against
-  "separate the work from the prompts" (see batch below) and mixes "user declined" with other failures. Question
-  asked: if batch runs unattended and hits an existing file, who decides, and how do they learn the file exists?
-- `deliver_file` never creates the target folder (old `prep.py:149` did `target_path.mkdir(...)`), so the first
-  delivery of a new title/season fails.
+- Small: `prep_ops.py` has unused imports (`os.path.exists`, `load_config`).
+- `path_constructor` asks the overwrite question itself, behind a `prompt: bool` flag: **deliberate**, see
+  "Overwrite prompt" under batch below.
 - `TMDB_query`: `if not results and loose_query == True: return []` is now redundant (an empty list already
   gives `[]`), but `data.get("results")` returning `None` would break the slice.
 - `manual_edit` (in `prompts.py`): `input()` gives strings, so year/season/episode are `str` and
@@ -154,6 +149,14 @@ Open questions (asked, not answered yet):
 - **Separate the work from the prompts first.** Split `cmd_prep` into work steps (token, destination, parse,
   search, build target path, move/copy) and user-facing steps; prompts go to `prompts.py`. `TMDB_select` is mostly
   a prompt and probably moves there. `prep` and `batch` share the work steps instead of duplicating them.
+- **Overwrite prompt: exception to the above** (Fidel's decision, 2026-11-10). `path_constructor(destination,
+  media, match, prompt: bool)` keeps the "already exists, overwrite?" question inside, switched on/off by `prompt`.
+  Reason: one shared place for the overwrite decision, easy to toggle for prep, unattended batch, a future
+  "no prompts" option, or a batch where the user does want to be asked. Two things to revisit when building batch:
+  1. `prompt=False` currently means **overwrite silently**; a `bool` can't express "skip existing", which
+     unattended batch may want (ask / skip / overwrite needs more than two values).
+  2. It returns `None` when the user declines; once batch counts results ("3 moved, 1 skipped"), a skip may need
+     to be told apart from an error.
 - **Destination becomes an option, `--destination` (long form only).** Reason: with several input paths
   (`nargs="+"`), an optional positional destination can't be told apart from an input (argparse is greedy; tried
   in practice). **The `jarr <video>` shortcut gets removed** (too much upkeep). Both are breaking → **0.4.0**,
